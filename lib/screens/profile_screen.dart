@@ -139,21 +139,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _pickProfileImage() async {
-    final image = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (!mounted || image == null) return;
-
-    final imageBytes = await image.readAsBytes();
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
-      _showUploadMessage('Şəkil yükləmək üçün hesaba daxil olun.', isError: true);
-      return;
-    }
-
-    setState(() => _isUploadingProfileImage = true);
     try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (!mounted || image == null) return;
+
+      final imageBytes = await image.readAsBytes();
+      if (!mounted) return;
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        _showUploadMessage('Şəkil yükləmək üçün hesaba daxil olun.', isError: true);
+        return;
+      }
+
+      setState(() => _isUploadingProfileImage = true);
       final extension = image.path.split('.').last.toLowerCase();
       final contentType = image.mimeType ?? 'image/$extension';
       final path =

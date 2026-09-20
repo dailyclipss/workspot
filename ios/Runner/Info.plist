@@ -30,6 +30,8 @@
 	<string>Vakansiya üçün şəkil seçmək üçün qalereyaya giriş icazəsi tələb olunur.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Vakansiya üçün şəkil çəkmək üçün kameraya giriş icazəsi tələb olunur.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Video və səs əlavə etmək üçün mikrofona giriş icazəsi tələb olunur.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>İş məkanını xəritədə seçmək üçün məkan icazəsi tələb olunur.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

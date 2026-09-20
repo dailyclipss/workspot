@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as latlong;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/app_language.dart';
 import 'payment_screen.dart';
+
+typedef LatLng = latlong.LatLng;
 
 class AddJobScreen extends StatefulWidget {
   const AddJobScreen({super.key});
@@ -299,29 +302,44 @@ class _AddJobScreenState extends State<AddJobScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: _selectedLocation,
-                      zoom: 14.0,
+                  child: FlutterMap(
+                    options: MapOptions(
+                      initialCenter: _selectedLocation,
+                      initialZoom: 14.0,
+                      onTap: (_, point) {
+                        if (!mounted) return;
+                        try {
+                          setState(() => _selectedLocation = point);
+                        } catch (error) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Məkan seçilə bilmədi: $error'),
+                            ),
+                          );
+                        }
+                      },
                     ),
-                    onTap: (LatLng point) {
-                      if (!context.mounted) return;
-                      try {
-                        setState(() => _selectedLocation = point);
-                      } catch (error) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Məkan seçilə bilmədi: $error'),
-                          ),
-                        );
-                      }
-                    },
-                    markers: {
-                      Marker(
-                        markerId: const MarkerId('selected_job_loc'),
-                        position: _selectedLocation,
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.workspot',
                       ),
-                    },
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _selectedLocation,
+                            width: 40,
+                            height: 40,
+                            child: const Icon(
+                              Icons.location_on,
+                              color: Colors.redAccent,
+                              size: 38,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
