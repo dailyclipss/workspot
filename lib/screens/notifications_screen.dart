@@ -14,33 +14,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   final List<Map<String, dynamic>> _notifications = [
     {
       'id': '1',
-      'title': 'CV-nizə baxıldı!',
-      'message': 'Coffee Moffie şirkəti "Senior Barista" vakansiyası üçün göndərdiyiniz müraciətə baxdı.',
-      'time': '10 dəq əvvəl',
+      'company': 'Coffee Moffie',
+      'jobKey': 'senior_barista',
+      'timeKey': 'time_10_minutes',
       'isRead': false,
       'type': 'application',
     },
     {
       'id': '2',
-      'title': 'Müsahibə Dəvəti 🎯',
-      'message': 'Vertex Media şirkəti sizi "Junior Flutter Developer" vakansiyası üzrə onlayn müsahibəyə dəvət edir.',
-      'time': '2 saat əvvəl',
+      'company': 'Vertex Media',
+      'jobKey': 'junior_flutter_developer',
+      'timeKey': 'time_2_hours',
       'isRead': false,
       'type': 'interview',
     },
     {
       'id': '3',
-      'title': 'Ərazinizdə Yeni Vakansiya 📍',
-      'message': 'Yaxınlığınızda (500m məsafədə) yeni "Kassa Operatoru" elanı yerləşdirildi.',
-      'time': 'Dünən',
+      'jobKey': 'cashier_operator',
+      'timeKey': 'time_yesterday',
       'isRead': true,
       'type': 'new_job',
     },
     {
       'id': '4',
-      'title': 'Sistem Bildirişi',
-      'message': 'WorkSpot tətbiqində profil məlumatlarınızı tamamlayaraq daha çox işəgötürənin diqqətini çəkə bilərsiniz.',
-      'time': '3 gün əvvəl',
+      'timeKey': 'time_3_days',
       'isRead': true,
       'type': 'system',
     },
@@ -69,10 +66,55 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Bütün bildirişlər oxunmuş kimi işarələndi'),
+      SnackBar(
+        content: Text(appLang.translate('mark_all_read')),
         duration: Duration(seconds: 2),
       ),
+    );
+  }
+
+  String _localizedJob(String? jobKey) {
+    switch (jobKey) {
+      case 'senior_barista':
+        return appLang.currentLanguage == 'ru'
+            ? 'Старший бариста'
+            : appLang.currentLanguage == 'en'
+                ? 'Senior Barista'
+                : 'Senior Barista';
+      case 'junior_flutter_developer':
+        return appLang.currentLanguage == 'ru'
+            ? 'Младший Flutter-разработчик'
+            : appLang.currentLanguage == 'en'
+                ? 'Junior Flutter Developer'
+                : 'Junior Flutter Developer';
+      case 'cashier_operator':
+        return appLang.currentLanguage == 'ru'
+            ? 'Кассир-оператор'
+            : appLang.currentLanguage == 'en'
+                ? 'Cashier Operator'
+                : 'Kassa Operatoru';
+      default:
+        return jobKey ?? '';
+    }
+  }
+
+  String _localizedText(String key, {String company = '', String job = ''}) {
+    return appLang
+        .translate(key)
+        .replaceAll('{company}', company)
+        .replaceAll('{job}', job);
+  }
+
+  String _notificationTitle(String type) {
+    return appLang.translate('notification_${type}_title');
+  }
+
+  String _notificationMessage(Map<String, dynamic> item) {
+    final type = item['type'] as String;
+    return _localizedText(
+      'notification_${type}_message',
+      company: item['company']?.toString() ?? '',
+      job: _localizedJob(item['jobKey']?.toString()),
     );
   }
 
@@ -111,14 +153,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Bildirişlər', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appLang.translate('notifications'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0.5,
         actions: [
           IconButton(
             icon: const Icon(Icons.done_all_rounded, color: Color(0xFF2563EB)),
-            tooltip: 'Hamısını oxunmuş et',
+            tooltip: appLang.translate('mark_all_read'),
             onPressed: _markAllAsRead,
           ),
         ],
@@ -132,7 +174,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: Row(
               children: [
                 ChoiceChip(
-                  label: Text('Bütün bildirişlər (${_notifications.length})'),
+                  label: Text('${appLang.translate('all_notifications')} (${_notifications.length})'),
                   selected: _selectedFilterIndex == 0,
                   selectedColor: const Color(0xFF2563EB),
                   labelStyle: TextStyle(
@@ -144,7 +186,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
-                  label: Text('Oxunmamışlar (${_notifications.where((n) => !n['isRead']).length})'),
+                  label: Text('${appLang.translate('unread_notifications')} (${_notifications.where((n) => !n['isRead']).length})'),
                   selected: _selectedFilterIndex == 1,
                   selectedColor: const Color(0xFF2563EB),
                   labelStyle: TextStyle(
@@ -169,8 +211,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey[300]),
                         const SizedBox(height: 12),
                         Text(
-                          _selectedFilterIndex == 1 ? 'Oxunmamış bildirişiniz yoxdur' : 'Bildiriş tapılmadı',
-                          style: const TextStyle(color: Colors.grey, fontSize: 14),
+                            _selectedFilterIndex == 1
+                              ? appLang.translate('notifications_unread_empty')
+                              : appLang.translate('notifications_empty'),
+                            style: const TextStyle(color: Colors.grey, fontSize: 14),
                         ),
                       ],
                     ),
@@ -231,7 +275,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    item['title'],
+                                    _notificationTitle(item['type'] as String),
                                     style: TextStyle(
                                       fontWeight: isRead ? FontWeight.w600 : FontWeight.bold,
                                       fontSize: 15,
@@ -255,7 +299,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               children: [
                                 const SizedBox(height: 4),
                                 Text(
-                                  item['message'],
+                                  _notificationMessage(item),
                                   style: TextStyle(
                                     color: Colors.grey[700],
                                     fontSize: 13,
@@ -264,7 +308,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  item['time'],
+                                  appLang.translate(item['timeKey'] as String),
                                   style: TextStyle(color: Colors.grey[400], fontSize: 11),
                                 ),
                               ],

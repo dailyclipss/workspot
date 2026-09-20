@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/app_language.dart';
+import 'payment_screen.dart';
 
 class AddJobScreen extends StatefulWidget {
   const AddJobScreen({super.key});
@@ -16,8 +16,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _companyController = TextEditingController();
   final TextEditingController _salaryController = TextEditingController();
-  final MapController _mapController = MapController();
-
+  // final MapController _mapController = MapController();
   String _selectedCategory = 'catering';
   String _selectedEmploymentType = 'Tam iş günü';
   bool _isVip = false;
@@ -66,35 +65,77 @@ class _AddJobScreenState extends State<AddJobScreen> {
     if (mounted) setState(() {});
   }
 
+  String _employmentTypeLabel(String type) {
+    switch (type) {
+      case 'Tam iş günü':
+        return appLang.translate('full_time');
+      case 'Yarım iş günü':
+        return appLang.translate('part_time');
+      case 'Növbəli':
+        return appLang.translate('shift_work');
+      case 'Gündəlik':
+        return appLang.translate('daily_work');
+      case 'Saatlıq / Sərbəst':
+        return appLang.translate('hourly_flexible');
+      case 'Uzaqdan (Remote)':
+        return appLang.translate('remote_work');
+      default:
+        return type;
+    }
+  }
+
   Future<void> _submitJob() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
 
     try {
-      final salary = double.tryParse(_salaryController.text.trim()) ?? 0.0;
+      final salaryText = _salaryController.text.trim();
+      final salaryInput = salaryText.replaceAll(RegExp(r'[^0-9.]'), '');
+      final salaryAmount = double.tryParse(salaryInput) ?? 0.0;
+      final String? selectedCategory =
+          _selectedCategory.trim().isEmpty ? null : _selectedCategory.trim();
+      final String? selectedJobType = _selectedEmploymentType.trim().isEmpty
+          ? null
+          : _selectedEmploymentType.trim();
+      final LatLng? selectedLocation = _selectedLocation;
+      final bool? isVip = _isVip;
+      const location = 'Bakı';
+      final latitude = selectedLocation?.latitude ?? 40.3725;
+      final longitude = selectedLocation?.longitude ?? 49.8372;
 
-      await Supabase.instance.client.from('jobs').insert({
-        'title': _titleController.text.trim(),
-        'company_name': _companyController.text.trim(),
-        'category': _selectedCategory,
-        'employment_type': _selectedEmploymentType,
-        'salary_amount': salary,
-        'lat': _selectedLocation.latitude,
-        'lng': _selectedLocation.longitude,
-        'distance_meters': 300,
-        'is_vip': _isVip,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      final job = await Supabase.instance.client
+          .from('jobs')
+          .insert({
+            'title': _titleController.text.trim().isEmpty
+                ? 'Vakansiya'
+                : _titleController.text.trim(),
+            'company_name': _companyController.text.trim().isEmpty
+                ? 'Şirkət'
+                : _companyController.text.trim(),
+            'category': selectedCategory ?? 'Digər',
+            'job_type': selectedJobType ?? 'Tam iş günü',
+            'employment_type': selectedJobType ?? 'Tam iş günü',
+            'salary': '${salaryText.isEmpty ? '0' : salaryText} AZN',
+            'salary_amount': salaryAmount,
+            'salary_type': 'Aylıq',
+            'location': location,
+            'latitude': latitude,
+            'longitude': longitude,
+            'status': 'pending_payment',
+            'is_vip': isVip ?? false,
+          })
+          .select('id')
+          .single();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vakansiya uğurla yerləşdirildi!'),
-          backgroundColor: Colors.green,
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentScreen(jobId: job['id'].toString()),
         ),
       );
-      Navigator.pop(context, true);
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,7 +153,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Yeni Vakansiya Əlavə Et', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appLang.translate('add_vacancy'),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0.5,
@@ -128,12 +170,15 @@ class _AddJobScreenState extends State<AddJobScreen> {
               TextFormField(
                 controller: _titleController,
                 decoration: InputDecoration(
-                  labelText: 'Vakansiya Adı *',
+                  labelText: appLang.translate('job_title_required'),
                   hintText: 'məs: Senior Barista',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   prefixIcon: const Icon(Icons.work_outline),
                 ),
-                validator: (val) => (val == null || val.isEmpty) ? 'Zəhmət olmasa vakansiya adını qeyd edin' : null,
+                validator: (val) => (val == null || val.isEmpty)
+                    ? 'Zəhmət olmasa vakansiya adını qeyd edin'
+                    : null,
               ),
               const SizedBox(height: 14),
 
@@ -141,12 +186,15 @@ class _AddJobScreenState extends State<AddJobScreen> {
               TextFormField(
                 controller: _companyController,
                 decoration: InputDecoration(
-                  labelText: 'Şirkət / Məkan Adı *',
+                  labelText: appLang.translate('company_place_required'),
                   hintText: 'məs: Coffee Moffie',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   prefixIcon: const Icon(Icons.business_outlined),
                 ),
-                validator: (val) => (val == null || val.isEmpty) ? 'Zəhmət olmasa şirket adını qeyd edin' : null,
+                validator: (val) => (val == null || val.isEmpty)
+                    ? 'Zəhmət olmasa şirket adını qeyd edin'
+                    : null,
               ),
               const SizedBox(height: 14),
 
@@ -157,20 +205,22 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     child: DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       decoration: InputDecoration(
-                        labelText: 'Kateqoriya',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        labelText: appLang.translate('category_label'),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       items: _categories.map((cat) {
                         return DropdownMenuItem(
                           value: cat['id'],
                           child: Text(
-                            appLang.translate(cat['key']!) ?? cat['id']!,
+                            appLang.translate(cat['key']!),
                             style: const TextStyle(fontSize: 13),
                           ),
                         );
                       }).toList(),
                       onChanged: (val) {
-                        if (val != null) setState(() => _selectedCategory = val);
+                        if (val != null)
+                          setState(() => _selectedCategory = val);
                       },
                     ),
                   ),
@@ -179,17 +229,21 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     child: DropdownButtonFormField<String>(
                       value: _selectedEmploymentType,
                       decoration: InputDecoration(
-                        labelText: 'İş Rejimi',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        labelText: appLang.translate('job_type_label'),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       items: _employmentTypes.map((type) {
                         return DropdownMenuItem(
                           value: type,
-                          child: Text(type, style: const TextStyle(fontSize: 13)),
+                            child: Text(
+                              _employmentTypeLabel(type),
+                              style: const TextStyle(fontSize: 13)),
                         );
                       }).toList(),
                       onChanged: (val) {
-                        if (val != null) setState(() => _selectedEmploymentType = val);
+                        if (val != null)
+                          setState(() => _selectedEmploymentType = val);
                       },
                     ),
                   ),
@@ -202,19 +256,23 @@ class _AddJobScreenState extends State<AddJobScreen> {
                 controller: _salaryController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'Maaş (AZN) *',
+                  labelText: appLang.translate('salary_required'),
                   hintText: 'məs: 850',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   prefixIcon: const Icon(Icons.attach_money_rounded),
                 ),
-                validator: (val) => (val == null || val.isEmpty) ? 'Zəhmət olmasa maaşı qeyd edin' : null,
+                validator: (val) => (val == null || val.isEmpty)
+                    ? 'Zəhmət olmasa maaşı qeyd edin'
+                    : null,
               ),
               const SizedBox(height: 14),
 
               // VIP Çekboks
               SwitchListTile(
-                title: const Text('VIP Elan kimi yerləşdir', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Xəritədə qızılı rəngdə üst sırada göstərilir'),
+                title: Text(appLang.translate('vip_publish'),
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(appLang.translate('vip_subtitle')),
                 activeColor: Colors.amber.shade800,
                 value: _isVip,
                 onChanged: (val) => setState(() => _isVip = val),
@@ -222,9 +280,12 @@ class _AddJobScreenState extends State<AddJobScreen> {
               const SizedBox(height: 10),
 
               // Xəritədən Məkan Seçimi Başlıq
-              const Text(
-                'İş Məkanını Xəritədə Seçin (Xəritəyə toxunun):',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+              Text(
+                appLang.translate('select_location'),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Color(0xFF0F172A)),
               ),
               const SizedBox(height: 8),
 
@@ -233,46 +294,31 @@ class _AddJobScreenState extends State<AddJobScreen> {
                 height: 220,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF2563EB), width: 1.5),
+                  border:
+                      Border.all(color: const Color(0xFF2563EB), width: 1.5),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: _selectedLocation,
-                      initialZoom: 14.0,
-                      onTap: (tapPosition, point) {
-                        setState(() => _selectedLocation = point);
-                      },
+                  child: GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: _selectedLocation,
+                      zoom: 14.0,
                     ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-                        userAgentPackageName: 'com.workspot.app',
+                    onTap: (LatLng point) {
+                      setState(() => _selectedLocation = point);
+                    },
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('selected_job_loc'),
+                        position: _selectedLocation,
                       ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _selectedLocation,
-                            width: 40,
-                            height: 40,
-                            alignment: Alignment.center,
-                            child: const Icon(
-                              Icons.location_on,
-                              color: Colors.redAccent,
-                              size: 40,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                    },
                   ),
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                'Seçilmiş kordinat: ${_selectedLocation.latitude.toStringAsFixed(4)}, ${_selectedLocation.longitude.toStringAsFixed(4)}',
+                '${appLang.translate('selected_coordinate')} ${_selectedLocation.latitude.toStringAsFixed(4)}, ${_selectedLocation.longitude.toStringAsFixed(4)}',
                 style: const TextStyle(fontSize: 11, color: Colors.grey),
               ),
               const SizedBox(height: 24),
@@ -285,13 +331,17 @@ class _AddJobScreenState extends State<AddJobScreen> {
                   onPressed: _isSubmitting ? null : _submitJob,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                   ),
                   child: _isSubmitting
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Vakansiyanı Dərc Et',
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        : Text(
+                          appLang.translate('publish_vacancy'),
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold),
                         ),
                 ),
               ),

@@ -402,9 +402,52 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                               height: 54,
                               child: ElevatedButton.icon(
                                 onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => const PhoneInputScreen()),
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (context) => Container(
+                                      padding: const EdgeInsets.all(24),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF1E293B),
+                                        borderRadius: BorderRadius.vertical(
+                                          top: Radius.circular(24),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text(
+                                            'Telefon Nömrəsi ilə Giriş',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          const TextField(
+                                            keyboardType: TextInputType.phone,
+                                            style: TextStyle(color: Colors.white),
+                                            decoration: InputDecoration(
+                                              hintText: '+994 50 000 00 00',
+                                              hintStyle: TextStyle(color: Colors.grey),
+                                              filled: true,
+                                              fillColor: Color(0xFF0F172A),
+                                              border: OutlineInputBorder(),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton(
+                                              onPressed: () => Navigator.pop(context),
+                                              child: const Text('Kodu Göndər'),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   );
                                 },
                                 icon: const Icon(Icons.phone_android_rounded, color: Colors.white, size: 22),
