@@ -447,8 +447,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         ),
                         children: [
                           TileLayer(
-                            urlTemplate:
-                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            urlTemplate: _isSatelliteMode
+                                ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                                : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                             userAgentPackageName: 'com.example.workspot',
                           ),
                           MarkerLayer(markers: _markers),
@@ -541,8 +542,23 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             IconButton(
               icon: const Icon(Icons.add_circle_outline_rounded,
                   color: Color(0xFF2563EB)),
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const AddJobScreen())),
+              onPressed: () async {
+                try {
+                  if (!context.mounted) return;
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const AddJobScreen()),
+                  );
+                  if (!mounted || !context.mounted) return;
+                  await _fetchJobs();
+                } catch (error) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Vakansiya ekranı açıla bilmədi: $error')),
+                  );
+                }
+              },
             ),
             IconButton(
               icon: const Icon(Icons.person_outline_rounded),
@@ -712,12 +728,18 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         const SizedBox(height: 8),
         FloatingActionButton.small(
           heroTag: 'satellite_toggle',
-          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-          foregroundColor: const Color(0xFF2563EB),
+          backgroundColor: _isSatelliteMode
+              ? const Color(0xFF2563EB)
+              : (isDark ? const Color(0xFF1E293B) : Colors.white),
+          foregroundColor:
+              _isSatelliteMode ? Colors.white : const Color(0xFF2563EB),
           tooltip: _isSatelliteMode
               ? appLang.translate('vector_mode')
               : appLang.translate('satellite_mode'),
-          onPressed: () => setState(() => _isSatelliteMode = !_isSatelliteMode),
+          onPressed: () {
+            if (!mounted) return;
+            setState(() => _isSatelliteMode = !_isSatelliteMode);
+          },
           child: Icon(_isSatelliteMode
               ? Icons.map_rounded
               : Icons.satellite_alt_rounded),

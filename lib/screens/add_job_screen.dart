@@ -305,7 +305,16 @@ class _AddJobScreenState extends State<AddJobScreen> {
                       zoom: 14.0,
                     ),
                     onTap: (LatLng point) {
-                      setState(() => _selectedLocation = point);
+                      if (!context.mounted) return;
+                      try {
+                        setState(() => _selectedLocation = point);
+                      } catch (error) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Məkan seçilə bilmədi: $error'),
+                          ),
+                        );
+                      }
                     },
                     markers: {
                       Marker(
