@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' as latlong;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
@@ -17,6 +18,124 @@ import 'notifications_screen.dart';
 import 'profile_screen.dart';
 
 typedef LatLng = latlong.LatLng;
+
+class _CategoryMeta {
+  final Color color;
+  final IconData icon;
+  const _CategoryMeta(this.color, this.icon);
+}
+
+class _JobMarkerBadge extends StatefulWidget {
+  final _CategoryMeta meta;
+  final String salaryLabel;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _JobMarkerBadge({
+    required this.meta,
+    required this.salaryLabel,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  State<_JobMarkerBadge> createState() => _JobMarkerBadgeState();
+}
+
+class _JobMarkerBadgeState extends State<_JobMarkerBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        scale: widget.isSelected ? 1.1 : 1.0,
+        child: AnimatedBuilder(
+          animation: _pulseController,
+          builder: (context, child) {
+            final pulse = widget.isSelected ? _pulseController.value : 0.0;
+            final glowColor = Color.lerp(
+              const Color(0xFF22D3EE),
+              const Color(0xFF2563EB),
+              pulse,
+            )!;
+            return FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF121824).withOpacity(0.90),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: widget.isSelected ? glowColor : Colors.white24,
+                    width: widget.isSelected ? 1.6 : 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.22),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                    if (widget.isSelected)
+                      BoxShadow(
+                        color: glowColor.withOpacity(0.3 + pulse * 0.3),
+                        blurRadius: 12 + pulse * 8,
+                        spreadRadius: 1 + pulse * 1.5,
+                      ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: widget.meta.color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(widget.meta.icon, color: Colors.white, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.salaryLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
 
 class HomeMapScreen extends StatefulWidget {
   const HomeMapScreen({super.key});
@@ -34,7 +153,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   LatLng _mapCenter = const LatLng(40.3750, 49.8430);
   bool _isMapLoading = true;
   bool _isJobsLoading = false;
-  List<Marker> _markers = [];
+  String? _selectedJobId;
   bool _isSatelliteMode = false;
   bool _isFilterOpen = false;
   String _selectedCategory = 'all';
@@ -56,110 +175,270 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     'cat_beauty',
   ];
 
-  List<Map<String, dynamic>> _allJobs = [
+  final List<Map<String, dynamic>> mockJobs = [
     {
-      'id': 'job_1',
-      'status': 'active',
-      'company_name': 'Anadolu Restaurant',
-      'title': 'Baş Ofisiant / Garson',
-      'salary': 600,
-      'salary_text': '600 - 800 ₼',
-      'category': 'cat_catering',
-      'job_type': 'full_time',
-      'point': const LatLng(40.3772, 49.8381),
-      'address': 'Puşkin küç. 14, Bakı',
-      'is_verified': true,
-      'posted_time': '2 saat əvvəl',
-      'icon': Icons.restaurant_rounded,
-      'description':
-          'Təcrübəli baş ofisiant tələb olunur. Növbəli iş qrafiki, pulsuz nahar verilir.',
+      'title': 'Barista / Kofe Mütəxəssisi',
+      'companyName': 'Urban Cafe 28',
+      'category': 'Kafe & Restoran',
+      'salary': '600 - 800 AZN',
+      'jobType': 'Tam iş günü',
+      'address': '28 May küç., 28 Mall yaxınlığı',
+      'latitude': 40.3798,
+      'longitude': 49.8472,
+      'description': 'Aktiv, mehriban və kofe hazırlamağı sevən barista axtarılır.',
+      'imageUrl': 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb',
+      'createdAt': DateTime.now().toIso8601String(),
     },
     {
-      'id': 'job_2',
-      'status': 'active',
-      'company_name': 'Urban Cafe Baku',
-      'title': 'Barista / Qəhvə Ustası',
-      'salary': 650,
-      'salary_text': '650 ₼',
-      'category': 'cat_catering',
-      'job_type': 'full_time',
-      'point': const LatLng(40.3750, 49.8430),
-      'address': 'Nizami küç. 83 (Tarqovı)',
-      'is_verified': true,
-      'posted_time': 'Dünən',
-      'icon': Icons.local_cafe_rounded,
-      'description':
-          'Espresso maşınları ilə işləməyi bacaran pozitiv barista axtarırıq.',
+      'title': 'Kassir',
+      'companyName': 'Baku Book & Stationery',
+      'category': 'Satış & Retail',
+      'salary': '550 - 650 AZN',
+      'jobType': 'Tam iş günü',
+      'address': '28 May m/s çıxışı',
+      'latitude': 40.3805,
+      'longitude': 49.8490,
+      'description': 'Kassa aparatları ilə işləyə bilən diqqətli əməkdaş.',
+      'imageUrl': 'https://images.unsplash.com/photo-1556742049-0a670f4a4591',
+      'createdAt': DateTime.now().toIso8601String(),
     },
     {
-      'id': 'job_3',
-      'status': 'active',
-      'company_name': 'Coffee Moffie',
-      'title': 'Kassa Operatoru',
-      'salary': 550,
-      'salary_text': '550 ₼',
-      'category': 'cat_catering',
-      'job_type': 'part_time',
-      'point': const LatLng(40.3725, 49.8405),
-      'address': 'Rəşid Behbudov küç. 22',
-      'is_verified': false,
-      'posted_time': '3 gün əvvəl',
-      'icon': Icons.coffee_rounded,
-      'description':
-          'R-Keeper proqramını bilən gənc və dinamik kassa operatoru.',
+      'title': 'Florist / Çiçək Dizayneri',
+      'companyName': 'Rose Boutique',
+      'category': 'Xidmət & Dizayn',
+      'salary': '600 - 900 AZN',
+      'jobType': 'Tam iş günü',
+      'address': 'Rəşid Behbudov küç.',
+      'latitude': 40.3770,
+      'longitude': 49.8420,
+      'description': 'Gül buketlərinin və kompozisiyalarının yığılması.',
+      'imageUrl': 'https://images.unsplash.com/photo-1561181286-d3fee7d55364',
+      'createdAt': DateTime.now().toIso8601String(),
     },
     {
-      'id': 'job_4',
-      'status': 'active',
-      'company_name': 'Zara (Port Baku)',
-      'title': 'Satış Məsləhətçisi',
-      'salary': 800,
-      'salary_text': '800 - 1000 ₼',
-      'category': 'cat_sales',
-      'job_type': 'full_time',
-      'point': const LatLng(40.3740, 49.8580),
-      'address': 'Port Baku Mall, 1-ci mərtəbə',
-      'is_verified': true,
-      'posted_time': '5 saat əvvəl',
-      'icon': Icons.checkroom_rounded,
-      'description':
-          'Geyim mağazasında müştərilərə xidmət və geyimlərin nizamlanması.',
+      'title': 'Satıcı-Məsləhətçi',
+      'companyName': 'Trendy Fashion Store',
+      'category': 'Satış & Retail',
+      'salary': '500 - 700 AZN + %',
+      'jobType': 'Növbəli',
+      'address': 'Nizami küç. (Torqovaya)',
+      'latitude': 40.3712,
+      'longitude': 49.8372,
+      'description': 'Geyim mağazasına aktiv satış təmsilçisi tələb olunur.',
+      'imageUrl': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8',
+      'createdAt': DateTime.now().toIso8601String(),
     },
     {
-      'id': 'job_5',
-      'status': 'active',
-      'company_name': 'Wolt Azerbaijan',
-      'title': 'Kuryer (Moped / Avto)',
-      'salary': 1200,
-      'salary_text': '1000 - 1500 ₼',
-      'category': 'cat_logistics',
-      'job_type': 'part_time',
-      'point': const LatLng(40.3690, 49.8480),
-      'address': 'Səbail rayonu, Bakı',
-      'is_verified': true,
-      'posted_time': 'Bugün',
-      'icon': Icons.delivery_dining_rounded,
-      'description':
-          'Sərbəst iş qrafiki ilə kuryer fəaliyyəti. Gündəlik ödəniş imkanı.',
+      'title': 'Hostess / Qonaq Qarşılayan',
+      'companyName': 'Anadolu Restaurant',
+      'category': 'Kafe & Restoran',
+      'salary': '600 - 750 AZN',
+      'jobType': 'Növbəli',
+      'address': 'Puşkin küç., Sahil m/s',
+      'latitude': 40.3705,
+      'longitude': 49.8450,
+      'description': 'Restorana gələn qonaqların qarşılanması və masalara yönləndirilməsi.',
+      'imageUrl': 'https://images.unsplash.com/photo-1560066984-138dadb4c035',
+      'createdAt': DateTime.now().toIso8601String(),
     },
     {
-      'id': 'job_6',
-      'status': 'active',
-      'company_name': 'Matrix Software',
-      'title': 'Flutter Developer',
-      'salary': 2200,
-      'salary_text': '2000 - 2500 ₼',
-      'category': 'cat_it',
-      'job_type': 'remote',
-      'point': const LatLng(40.3810, 49.8250),
-      'address': 'Jalə Plaza, 8-ci mərtəbə',
-      'is_verified': true,
-      'posted_time': '1 saat əvvəl',
-      'icon': Icons.code_rounded,
-      'description':
-          'Dart, Flutter, REST API və Supabase təcrübəsi olan proqramçı axtarılır.',
+      'title': 'Qəlyanaltı / Fast Food Ustası',
+      'companyName': 'Burger House',
+      'category': 'Kafe & Restoran',
+      'salary': '650 - 800 AZN',
+      'jobType': 'Tam iş günü',
+      'address': 'Fəvvarələr Meydanı',
+      'latitude': 40.3725,
+      'longitude': 49.8360,
+      'description': 'Burger və fast-food təamlarının hazırlanması.',
+      'imageUrl': 'https://images.unsplash.com/photo-1550547660-d9450f859349',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Ofisiant (Part-time)',
+      'companyName': 'Coffee Moffie',
+      'category': 'Kafe & Restoran',
+      'salary': '400 - 600 AZN + Çay pulu',
+      'jobType': 'Yarım iş günü',
+      'address': 'Elmlər Akademiyası m/s yaxınlığı',
+      'latitude': 40.3745,
+      'longitude': 49.8135,
+      'description': 'Tələbələr üçün dərslərdən sonra 4-5 saatlıq rahat iş qrafiki.',
+      'imageUrl': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Kopyalama və Print Operatoru',
+      'companyName': 'Copy Center Elmlər',
+      'category': 'Xidmət',
+      'salary': '450 - 550 AZN',
+      'jobType': 'Növbəli',
+      'address': 'Hüseyn Cavid pr.',
+      'latitude': 40.3720,
+      'longitude': 49.8150,
+      'description': 'Tələbə sənədlərinin çapı və kopyalanması xidməti.',
+      'imageUrl': 'https://images.unsplash.com/photo-1562654501-a0ccc0fc3fb1',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Piyada Kuryer',
+      'companyName': 'Express Delivery',
+      'category': 'Çatdırılma',
+      'salary': '600 - 900 AZN',
+      'jobType': 'Sərbəst qrafik',
+      'address': 'Nəriman Nərimanov m/s',
+      'latitude': 40.4028,
+      'longitude': 49.8711,
+      'description': 'Şəhər mərkəzində kiçik bağlamaların çatdırılması.',
+      'imageUrl': 'https://images.unsplash.com/photo-1526367790999-0150786686a2',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'SMM & Kontent Menecer',
+      'companyName': 'Creative Agency Studio',
+      'category': 'Marketing / Media',
+      'salary': '700 - 1000 AZN',
+      'jobType': 'Hibrid',
+      'address': 'Təbriz küç., Nərimanov',
+      'latitude': 40.4050,
+      'longitude': 49.8680,
+      'description': 'Reels/TikTok kontentləri hazırlayacaq kreativ komanda üzvü.',
+      'imageUrl': 'https://images.unsplash.com/photo-1531482615713-2afd69097998',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Məhsul Qablaşdırıcısı',
+      'companyName': 'SuperMarket Network',
+      'category': 'Anbar & Logistika',
+      'salary': '500 - 600 AZN',
+      'jobType': 'Tam iş günü',
+      'address': 'Gənclik m/s, Atatürk pr.',
+      'latitude': 40.4001,
+      'longitude': 49.8523,
+      'description': 'Vitrinlərin düzülməsi və məhsulların qablaşdırılması.',
+      'imageUrl': 'https://images.unsplash.com/photo-1578916171728-46686eac8d58',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Fitness Konsultant',
+      'companyName': 'Ganjlik Gym & Sport',
+      'category': 'İdman & Sağlamlıq',
+      'salary': '600 - 850 AZN',
+      'jobType': 'Növbəli',
+      'address': 'Gənclik Mall yaxınlığı',
+      'latitude': 40.3980,
+      'longitude': 49.8550,
+      'description': 'Zala gelen müştərilərin qarşılanması və abunəlik satışı.',
+      'imageUrl': 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Resepsionist',
+      'companyName': 'City Beauty Studio',
+      'category': 'Xidmət',
+      'salary': '600 - 750 AZN',
+      'jobType': 'Növbəli',
+      'address': 'İçərişəhər m/s yaxınlığı',
+      'latitude': 40.3661,
+      'longitude': 49.8322,
+      'description': 'Gözəllik salonuna qonaqları qarşılayacaq əməkdaş.',
+      'imageUrl': 'https://images.unsplash.com/photo-1560066984-138dadb4c035',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Qrafik Dizayner (Junior)',
+      'companyName': 'Print Art Baku',
+      'category': 'Dizayn',
+      'salary': '500 - 700 AZN',
+      'jobType': 'Tam iş günü',
+      'address': 'Nizami m/s, Cəfər Cabbarlı',
+      'latitude': 40.3790,
+      'longitude': 49.8280,
+      'description': 'Sosial media postlarının və reklam banerlərinin hazırlanması.',
+      'imageUrl': 'https://images.unsplash.com/photo-1626785774573-4b799315345d',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Satış Təmsilçisi',
+      'companyName': 'Auto Care Center',
+      'category': 'Avto & Xidmət',
+      'salary': '700 - 1000 AZN',
+      'jobType': 'Tam iş günü',
+      'address': 'Xətai m/s, Xocalı pr.',
+      'latitude': 40.3830,
+      'longitude': 49.8720,
+      'description': 'Avto aksesuarların və ehtiyat hissələrinin satışı.',
+      'imageUrl': 'https://images.unsplash.com/photo-1580273916550-e323be2ae537',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Ofis Meneceri',
+      'companyName': 'White City Logistics',
+      'category': 'Ofis & İnzibati',
+      'salary': '700 - 900 AZN',
+      'jobType': 'Tam iş günü',
+      'address': 'Ağ Şəhər (White City)',
+      'latitude': 40.3775,
+      'longitude': 49.8890,
+      'description': 'Zənglərin cavablandırılması və ofis daxili sənədləşmə.',
+      'imageUrl': 'https://images.unsplash.com/photo-1497366216548-37526070297c',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Apotek Satıcısı / Əczaçı',
+      'companyName': 'Zəfəran Aptek',
+      'category': 'Səhiyyə & Tibb',
+      'salary': '600 - 800 AZN',
+      'jobType': 'Növbəli',
+      'address': 'İnşaatçılar m/s çıxışı',
+      'latitude': 40.3890,
+      'longitude': 49.8030,
+      'description': 'Dərman vasitələrinin satışı və müştəri konsultasiyası.',
+      'imageUrl': 'https://images.unsplash.com/photo-1586015555751-63c205a30620',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Call Center Operatoru',
+      'companyName': 'Baku Telecom Partner',
+      'category': 'Xidmət & Zəng Mərkəzi',
+      'salary': '500 - 650 AZN',
+      'jobType': 'Növbəli',
+      'address': 'Yasamal, Şərifzadə küç.',
+      'latitude': 40.3840,
+      'longitude': 49.8080,
+      'description': 'Gələn zənglərin qəbulu və sualların cavablandırılması.',
+      'imageUrl': 'https://images.unsplash.com/photo-1534536281715-e28d76689b4d',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Anbar Fəhləsi / Anbardar',
+      'companyName': 'Baku Depot Park',
+      'category': 'Anbar & Logistika',
+      'salary': '550 - 700 AZN',
+      'jobType': 'Tam iş günü',
+      'address': 'Koroğlu m/s yaxınlığı',
+      'latitude': 40.4210,
+      'longitude': 49.9180,
+      'description': 'Anbara gələn malların qəbulu və boşaldılması.',
+      'imageUrl': 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d',
+      'createdAt': DateTime.now().toIso8601String(),
+    },
+    {
+      'title': 'Avtoyuyan / Detailer',
+      'companyName': 'VIP Car Wash',
+      'category': 'Xidmət',
+      'salary': '600 - 1000 AZN (Faizlə)',
+      'jobType': 'Tam iş günü',
+      'address': 'Heydər Əliyev pr.',
+      'latitude': 40.4120,
+      'longitude': 49.9010,
+      'description': 'Nəqliyyat vasitələrinin kimyəvi təmizlənməsi və yuyulması.',
+      'imageUrl': 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f',
+      'createdAt': DateTime.now().toIso8601String(),
     },
   ];
+
+  List<Map<String, dynamic>> _allJobs = [];
 
   @override
   void initState() {
@@ -188,7 +467,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           .from('jobs')
           .select();
       debugPrint('TOTAL JOBS FROM SUPABASE: ${response.length}');
-        final List<Marker> newMarkers = [];
+
       final jobs = List<Map<String, dynamic>>.from(response).map((job) {
         final normalizedJob = Map<String, dynamic>.from(job);
         normalizedJob['company_name'] ??= normalizedJob['company'];
@@ -208,55 +487,23 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           );
         } else {
           normalizedJob['point'] = LatLng(lat, lng);
-          newMarkers.add(
-            Marker(
-              point: latlong.LatLng(lat, lng),
-              width: 45,
-              height: 45,
-              child: GestureDetector(
-                onTap: () => _centerAndShowJob(normalizedJob),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.blueAccent, width: 2),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black38,
-                        blurRadius: 6,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    _getCategoryIcon(normalizedJob['category']?.toString()),
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-          );
         }
         return normalizedJob;
       }).toList();
 
-      _allJobs = jobs;
-
-      if (!mounted) return;
-      setState(() {
-        _markers = newMarkers;
-        _isJobsLoading = false;
-      });
-      debugPrint('RENDERED MARKERS COUNT: ${_markers.length}');
+      _allJobs = jobs.isEmpty ? _buildMockJobs() : jobs;
     } catch (error) {
       debugPrint('Error fetching jobs: $error');
+      _allJobs = _buildMockJobs();
       if (!mounted) return;
-      setState(() => _isJobsLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Elanlar yüklənmədi: $error')),
+        SnackBar(content: Text('Elanlar yüklənmədi, demo məlumat göstərilir: $error')),
       );
     }
+
+    if (!mounted) return;
+    setState(() => _isJobsLoading = false);
+    debugPrint('LOADED JOBS COUNT: ${_allJobs.length}');
   }
 
   Future<void> _loadUserLocation() async {
@@ -310,6 +557,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return _safeParseDouble(value) ?? 0.0;
   }
 
+  String _jobSalaryLabel(Map<String, dynamic> job) {
+    final salary = _jobSalary(job);
+    return salary <= 0 ? 'Razılaşma ilə' : '${salary.round()} ₼';
+  }
+
   IconData _getCategoryIcon(String? category) {
     switch (category) {
       case 'Restoran & Kafeler':
@@ -349,6 +601,151 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return job['icon'] is IconData
         ? job['icon'] as IconData
         : Icons.work_outline_rounded;
+  }
+
+  _CategoryMeta _categoryMeta(String? rawCategory) {
+    final normalized = (rawCategory ?? '').toLowerCase();
+    bool has(String needle) => normalized.contains(needle);
+
+    if (has('it') || has('proqram') || has('software')) {
+      return const _CategoryMeta(Color(0xFF00E676), Icons.code_rounded);
+    }
+    if (has('restoran') || has('kafe') || has('catering')) {
+      return const _CategoryMeta(Color(0xFFFF6D00), Icons.restaurant_rounded);
+    }
+    if (has('sat') || has('marketinq') || has('marketing')) {
+      return const _CategoryMeta(Color(0xFF2979FF), Icons.storefront_rounded);
+    }
+    if (has('səhiyyə') || has('tibb') || has('medicine') || has('health')) {
+      return const _CategoryMeta(
+          Color(0xFF00E5FF), Icons.medical_services_rounded);
+    }
+    if (has('logistika') || has('anbar') || has('çatdırılma') || has('logistics')) {
+      return const _CategoryMeta(
+          Color(0xFFD500F9), Icons.local_shipping_rounded);
+    }
+    if (has('müştəri') || has('customer') || has('zəng') || has('xidmət')) {
+      return const _CategoryMeta(Color(0xFF2979FF), Icons.headset_mic_rounded);
+    }
+    if (has('tikinti') || has('construction') || has('inşaat')) {
+      return const _CategoryMeta(
+          Color(0xFFFFAB00), Icons.construction_rounded);
+    }
+    if (has('təhsil') || has('education')) {
+      return const _CategoryMeta(Color(0xFFD500F9), Icons.school_rounded);
+    }
+    if (has('gözəllik') || has('beauty') || has('salon') || has('idman')) {
+      return const _CategoryMeta(
+          Color(0xFFFF5252), Icons.content_cut_rounded);
+    }
+    return const _CategoryMeta(Color(0xFF2979FF), Icons.work_rounded);
+  }
+
+  List<Marker> _buildMarkers() {
+    return _allJobs.where((job) => _jobPoint(job) != null).map((job) {
+      final point = _jobPoint(job)!;
+      final jobId = job['id']?.toString();
+      final isSelected =
+          _selectedJobId != null && _selectedJobId == jobId;
+      return Marker(
+        point: latlong.LatLng(point.latitude, point.longitude),
+        width: 130,
+        height: 40,
+        child: _JobMarkerBadge(
+          meta: _categoryMeta(job['category']?.toString()),
+          salaryLabel: _jobSalaryLabel(job),
+          isSelected: isSelected,
+          onTap: () {
+            setState(() => _selectedJobId = jobId);
+            _centerAndShowJob(job);
+          },
+        ),
+      );
+    }).toList();
+  }
+
+  Widget _buildClusterBadge(int count) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2563EB), Color(0xFF1E3A8A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2563EB).withOpacity(0.7),
+            blurRadius: 14,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '+$count',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _buildMockJobs() {
+    return mockJobs.map((job) {
+      final rawCategory = job['category']?.toString() ?? 'Kafe & Restoran';
+      final rawJobType = job['jobType']?.toString() ?? 'Tam iş günü';
+      final rawSalary = job['salary']?.toString() ?? '0';
+      final firstNumberMatch = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(rawSalary);
+      final salaryValue = firstNumberMatch == null
+          ? 0.0
+          : double.tryParse(firstNumberMatch.group(0)!.replaceAll(',', '.')) ?? 0.0;
+
+      final category = switch (rawCategory) {
+        'Kafe & Restoran' => 'cat_catering',
+        'Satış & Retail' => 'cat_sales',
+        'Xidmət & Dizayn' || 'Xidmət' || 'Xidmət & Zəng Mərkəzi' => 'cat_customer_service',
+        'Çatdırılma' || 'Anbar & Logistika' => 'cat_logistics',
+        'Marketing / Media' => 'cat_it',
+        'Ofis & İnzibati' => 'cat_customer_service',
+        'Səhiyyə & Tibb' => 'cat_medicine',
+        'İdman & Sağlamlıq' => 'cat_beauty',
+        'Dizayn' || 'Avto & Xidmət' => 'cat_beauty',
+        _ => 'cat_catering',
+      };
+
+      final jobType = switch (rawJobType) {
+        'Tam iş günü' => 'full_time',
+        'Yarım iş günü' => 'part_time',
+        'Növbəli' => 'part_time',
+        'Sərbəst qrafik' => 'part_time',
+        'Hibrid' => 'remote',
+        _ => 'full_time',
+      };
+
+      final latitude = (job['latitude'] is num) ? (job['latitude'] as num).toDouble() : 40.3750;
+      final longitude = (job['longitude'] is num) ? (job['longitude'] as num).toDouble() : 49.8430;
+
+      return {
+        'id': 'demo_${mockJobs.indexOf(job) + 1}',
+        'status': 'active',
+        'company_name': job['companyName'] ?? 'Şirkət',
+        'title': job['title'] ?? 'Vakansiya',
+        'salary': salaryValue,
+        'salary_text': rawSalary,
+        'category': category,
+        'job_type': jobType,
+        'point': LatLng(latitude, longitude),
+        'address': job['address'] ?? 'Bakı',
+        'is_verified': true,
+        'posted_time': 'Bugün',
+        'icon': _getCategoryIcon(category),
+        'description': job['description'] ?? 'Detallar göstərilir.',
+      };
+    }).toList();
   }
 
   List<Map<String, dynamic>> get _filteredJobs {
@@ -452,7 +849,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                                 : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                             userAgentPackageName: 'com.example.workspot',
                           ),
-                          MarkerLayer(markers: _markers),
+                          MarkerClusterLayerWidget(
+                            options: MarkerClusterLayerOptions(
+                              maxClusterRadius: 55,
+                              size: const Size(46, 46),
+                              markers: _buildMarkers(),
+                              builder: (context, clusterMarkers) =>
+                                  _buildClusterBadge(clusterMarkers.length),
+                            ),
+                          ),
                         ],
                       ),
               ),

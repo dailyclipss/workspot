@@ -4,6 +4,7 @@ import 'services/theme_service.dart';
 import 'services/app_language.dart';
 import 'screens/auth_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/job_seed_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,6 +13,12 @@ void main() async {
     url: 'https://erlguuogmrgyhuhbecny.supabase.co',
     publishableKey: 'sb_publishable_r7vI6rcDqvnn5B8W259y9g_xGNjtcTQ',
   );
+
+  try {
+    await JobSeedService.seedMockJobs();
+  } catch (e) {
+    print('Job seed xətası: $e');
+  }
 
   runApp(const MyApp());
 }
