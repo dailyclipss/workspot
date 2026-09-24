@@ -4,8 +4,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
 import '../services/app_language.dart';
+import '../services/payment_service.dart';
 import 'auth_screen.dart';
 import 'home_map_screen.dart';
+import 'payment_checkout_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -285,6 +287,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onChanged: (val) {
                       setModalState(() => _pushNotifications = val);
                       setState(() {});
+                    },
+                  ),
+                  const Divider(color: Color(0xFF334155)),
+
+                  // WorkSpot Biznes & Paketlər
+                  ListTile(
+                    leading: const Icon(Icons.workspace_premium_rounded,
+                        color: Color(0xFFFFD700)),
+                    title: Text(appLang.translate('biznes_packages_title'),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14)),
+                    subtitle: Text(
+                        appLang.translate('biznes_packages_subtitle'),
+                        style:
+                            const TextStyle(color: Colors.grey, fontSize: 12)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      final userId =
+                          Supabase.instance.client.auth.currentUser?.id ?? '';
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PaymentCheckoutScreen(
+                            targetId: userId,
+                            targetType: PaymentTargetType.proSubscription,
+                          ),
+                        ),
+                      );
                     },
                   ),
                   const Divider(color: Color(0xFF334155)),

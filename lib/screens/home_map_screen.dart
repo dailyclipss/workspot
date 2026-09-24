@@ -15,7 +15,9 @@ import '../services/location_service.dart';
 import 'add_job_screen.dart';
 import 'company_details_screen.dart';
 import 'notifications_screen.dart';
+import 'payment_checkout_screen.dart';
 import 'profile_screen.dart';
+import '../services/payment_service.dart';
 
 typedef LatLng = latlong.LatLng;
 
@@ -924,6 +926,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
               onPressed: () => setState(() => _isFilterOpen = !_isFilterOpen),
             ),
+            _buildVipBizButton(),
             IconButton(
               icon: const Icon(Icons.admin_panel_settings,
                   color: Colors.blueAccent),
@@ -972,6 +975,54 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             ),
             const SizedBox(width: 4),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVipBizButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Tooltip(
+        message: appLang.translate('vip_biznes_button'),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: _openVipBusinessCheckout,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFE066), Color(0xFFB8860B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.55)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFD700).withOpacity(0.45),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: const Icon(Icons.workspace_premium_rounded,
+                color: Colors.white, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openVipBusinessCheckout() {
+    final userId =
+        supabase.Supabase.instance.client.auth.currentUser?.id ?? '';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentCheckoutScreen(
+          targetId: userId,
+          targetType: PaymentTargetType.proSubscription,
         ),
       ),
     );
