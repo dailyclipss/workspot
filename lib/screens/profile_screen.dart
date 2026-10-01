@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
 import '../services/app_language.dart';
+import '../services/admin_auth_service.dart';
 import '../services/payment_service.dart';
 import 'auth_screen.dart';
 import 'home_map_screen.dart';
@@ -31,6 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _profileImageUrl;
   bool _isUploadingProfileImage = false;
   bool _isUploadingCv = false;
+  bool _isAdminUser = false;
 
   // Settings parametrlləri
   bool _pushNotifications = true;
@@ -43,6 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       _profileImageUrl = avatarUrl;
     }
+    _loadAdminStatus();
     _fetchMyApplications();
   }
 
@@ -56,6 +59,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  Future<void> _loadAdminStatus() async {
+    final isAdmin = await AdminAuthService.isAdminUser(Supabase.instance.client);
+    if (!mounted) return;
+    setState(() => _isAdminUser = isAdmin);
   }
 
   Future<void> _fetchMyApplications() async {
@@ -201,10 +210,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_selectedFilter == 'all') return _myApplications;
     return _myApplications.where((app) {
       final status = (app['status'] ?? '').toString().toLowerCase();
-      if (_selectedFilter == 'reviewed')
+      if (_selectedFilter == 'reviewed') {
         return status.contains('baxıldı') || status.contains('reviewed');
-      if (_selectedFilter == 'accepted')
+      }
+      if (_selectedFilter == 'accepted') {
         return status.contains('qəbul') || status.contains('accepted');
+      }
       return true;
     }).toList();
   }
@@ -320,6 +331,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
                   ),
                   const Divider(color: Color(0xFF334155)),
+
+                  if (_isAdminUser) ...[
+                    ListTile(
+                      leading: const Icon(Icons.dashboard_rounded,
+                          color: Color(0xFF38BDF8)),
+                      title: const Text('Admin Dashboard',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14)),
+                      subtitle: const Text(
+                        'Total system management',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/admin');
+                      },
+                    ),
+                    const Divider(color: Color(0xFF334155)),
+                  ],
 
                   // Çıxış düyməsi
                   ListTile(

@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/theme_service.dart';
 import 'services/app_language.dart';
 import 'screens/auth_screen.dart';
+import 'screens/admin_dashboard_screen.dart';
+import 'screens/admin_login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/job_seed_service.dart';
 
@@ -17,7 +19,7 @@ void main() async {
   try {
     await JobSeedService.seedMockJobs();
   } catch (e) {
-    print('Job seed xətası: $e');
+    debugPrint('Job seed xətası: $e');
   }
 
   runApp(const MyApp());
@@ -52,6 +54,27 @@ class MyApp extends StatelessWidget {
             textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
           ),
           home: const AuthScreen(),
+          onGenerateRoute: (settings) {
+            switch (settings.name) {
+              case '/admin':
+                final arguments = settings.arguments;
+                final hasPasscodeOverride =
+                    arguments is Map && arguments['passcodeOverride'] == true;
+                return MaterialPageRoute(
+                  settings: settings,
+                  builder: (_) => hasPasscodeOverride
+                      ? const AdminDashboardScreen(allowPasscodeOverride: true)
+                      : const AdminLoginScreen(),
+                );
+              case '/admin-login':
+                return MaterialPageRoute(
+                  settings: settings,
+                  builder: (_) => const AdminLoginScreen(),
+                );
+              default:
+                return null;
+            }
+          },
         );
       },
     );

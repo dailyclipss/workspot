@@ -24,27 +24,27 @@ class PaymentPackage {
   });
 }
 
-/// Predefined catalog: B2B USD packages (local POS) + B2C Pro subscription (IAP).
+/// Predefined catalog: B2B AZN packages (local POS) + B2C Pro subscription (IAP).
 class PaymentCatalog {
-  static const String defaultCurrency = 'USD';
+  static const String defaultCurrency = 'AZN';
 
   static const List<PaymentPackage> b2bPackages = [
     PaymentPackage(
       id: 'single_vip_pin',
       nameKey: 'pkg_single_vip_pin',
-      amount: 8.99,
+      amount: 15,
       vipDurationDays: 7,
     ),
     PaymentPackage(
       id: 'pro_business',
       nameKey: 'pkg_pro_business',
-      amount: 22.99,
+      amount: 45,
       vipDurationDays: 30,
     ),
     PaymentPackage(
       id: 'enterprise',
       nameKey: 'pkg_enterprise',
-      amount: 49.99,
+      amount: 99,
       vipDurationDays: 30,
     ),
   ];
@@ -53,6 +53,7 @@ class PaymentCatalog {
     id: 'pro_subscription_monthly',
     nameKey: 'pkg_pro_subscription',
     amount: 3.99,
+    currency: defaultCurrency,
     vipDurationDays: 30,
   );
 }

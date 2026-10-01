@@ -1,25 +1,26 @@
-import 'dart:math';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart' as latlong;
+import 'package:flutter/rendering.dart';
+import 'package:google_maps_cluster_manager_2/google_maps_cluster_manager_2.dart' as cm;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
-
-import '../admin/admin_approval_screen.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' hide Cluster, ClusterManager;
+import 'package:url_launcher/url_launcher.dart';
+import 'admin_dashboard_screen.dart';
 import '../core/services/application_service.dart';
 import '../models/job_model.dart';
 import '../services/app_language.dart';
 import '../services/location_service.dart';
-import 'add_job_screen.dart';
+import '../services/job_location_resolver.dart';
+import 'add_job_screen.dart' hide LatLng;
 import 'company_details_screen.dart';
 import 'notifications_screen.dart';
 import 'payment_checkout_screen.dart';
 import 'profile_screen.dart';
 import '../services/payment_service.dart';
-
-typedef LatLng = latlong.LatLng;
 
 class _CategoryMeta {
   final Color color;
@@ -27,142 +28,120 @@ class _CategoryMeta {
   const _CategoryMeta(this.color, this.icon);
 }
 
-class _JobMarkerBadge extends StatefulWidget {
-  final _CategoryMeta meta;
-  final String salaryLabel;
-  final bool isSelected;
-  final VoidCallback onTap;
+class _JobClusterItem with cm.ClusterItem {
+  final Map<String, dynamic> job;
+  final LatLng point;
 
-  const _JobMarkerBadge({
-    required this.meta,
-    required this.salaryLabel,
-    required this.isSelected,
-    required this.onTap,
-  });
+  _JobClusterItem({required this.job, required this.point});
 
   @override
-  State<_JobMarkerBadge> createState() => _JobMarkerBadgeState();
+  LatLng get location => point;
 }
 
-class _JobMarkerBadgeState extends State<_JobMarkerBadge>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    )..repeat(reverse: true);
+IconData _getCategoryIcon(String? category) {
+  switch (category) {
+    case 'Restoran & Kafeler':
+      return Icons.restaurant;
+    case 'İT & Proqramlaşdırma':
+      return Icons.code;
+    case 'Satış & Marketinq':
+      return Icons.shopping_bag;
+    case 'Logistika & Çatdırılma':
+      return Icons.local_shipping;
+    case 'Müştəri Xidmətləri':
+      return Icons.headset_mic;
+    case 'Tikinti & Təmir':
+      return Icons.construction;
+    case 'Təhsil & Tədris':
+      return Icons.school;
+    case 'Səhiyyə & Tibb':
+      return Icons.medical_services;
+    case 'Gözəllik & Salonda İş':
+      return Icons.content_cut;
+    default:
+      return Icons.work;
   }
+}
 
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
+Widget _buildMarkerWidget(Map<String, dynamic> job) {
+  // Safe bool parse for VIP/Verified status
+  final isVip = job['is_vip'] == true ||
+                job['is_vip'] == 1 ||
+                job['is_vip'].toString().toLowerCase() == 'true' ||
+                job['is_verified'] == true;
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        scale: widget.isSelected ? 1.1 : 1.0,
-        child: AnimatedBuilder(
-          animation: _pulseController,
-          builder: (context, child) {
-            final pulse = widget.isSelected ? _pulseController.value : 0.0;
-            final glowColor = Color.lerp(
-              const Color(0xFF22D3EE),
-              const Color(0xFF2563EB),
-              pulse,
-            )!;
-            return FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF121824).withOpacity(0.90),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: widget.isSelected ? glowColor : Colors.white24,
-                    width: widget.isSelected ? 1.6 : 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.22),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                    if (widget.isSelected)
-                      BoxShadow(
-                        color: glowColor.withOpacity(0.3 + pulse * 0.3),
-                        blurRadius: 12 + pulse * 8,
-                        spreadRadius: 1 + pulse * 1.5,
-                      ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 4,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: widget.meta.color,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(widget.meta.icon, color: Colors.white, size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      widget.salaryLabel,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
+  final salary = job['salary'] ?? '0';
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: const Color(0xFF181A20),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(
+        color: isVip ? const Color(0xFF3B82F6) : const Color(0xFF3B82F6), // FORCED BLUE BORDER
+        width: 1.5,
       ),
-    );
-  }
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(_getCategoryIcon(job['category']), size: 12, color: const Color(0xFF94A3B8)),
+        const SizedBox(width: 4),
+        Text(
+          '$salary ₼',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        if (isVip) ...[
+          const SizedBox(width: 4),
+          const Icon(Icons.verified, size: 12, color: Color(0xFF3B82F6)),
+        ],
+      ],
+    ),
+  );
 }
 
 class HomeMapScreen extends StatefulWidget {
-  const HomeMapScreen({super.key});
+  final String? flashMessage;
+
+  const HomeMapScreen({super.key, this.flashMessage});
 
   @override
   State<HomeMapScreen> createState() => _HomeMapScreenState();
 }
 
 class _HomeMapScreenState extends State<HomeMapScreen> {
+  static const LatLng _bakuYouthHubCenter = LatLng(40.3800, 49.8450);
+
   final ApplicationService _applicationService = ApplicationService();
   final TextEditingController _searchController = TextEditingController();
 
-  final MapController _mapController = MapController();
+  GoogleMapController? _mapController;
   bool _isMapReady = false;
-  LatLng _mapCenter = const LatLng(40.3750, 49.8430);
+  LatLng _mapCenter = _bakuYouthHubCenter;
+  LatLng? _currentUserLocation;
+  double _currentZoom = 12.8;
   bool _isMapLoading = true;
   bool _isJobsLoading = false;
-  String? _selectedJobId;
-  bool _isSatelliteMode = false;
+  MapType _currentMapType = MapType.normal;
   bool _isFilterOpen = false;
   String _selectedCategory = 'all';
   String _selectedJobType = 'all';
   double _radiusKm = 10.0;
   RangeValues _salaryRange = const RangeValues(300, 3000);
   bool _showOnlyVerified = false;
+  final Map<String, BitmapDescriptor> _singleMarkerIcons = {};
+  final Map<String, BitmapDescriptor> _clusterBadgeIcons = {};
+  final Map<String, BitmapDescriptor> _jobBadgeIcons = {};
+  Set<Marker> _jobMarkers = {};
+  Set<Marker> _clusterMarkers = {};
+  late final cm.ClusterManager<_JobClusterItem> _clusterManager;
+  StreamSubscription<List<Map<String, dynamic>>>? _jobsSubscription;
+  String? _selectedJobId;
 
   final List<String> _categories = const [
     'all',
@@ -445,14 +424,31 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   @override
   void initState() {
     super.initState();
+    _clusterManager = cm.ClusterManager<_JobClusterItem>(
+      const [],
+      _updateClusterMarkers,
+      markerBuilder: _clusterMarkerBuilder,
+      stopClusteringZoom: 17.0,
+      extraPercent: 0.20,
+    );
     appLang.addListener(_onLanguageChanged);
     _loadUserLocation();
-    _fetchJobs();
+    _fetchMapJobs();
+    _listenToJobs();
+    if (widget.flashMessage != null && widget.flashMessage!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.flashMessage!)),
+        );
+      });
+    }
   }
 
   @override
   void dispose() {
     appLang.removeListener(_onLanguageChanged);
+    _jobsSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -461,42 +457,26 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _fetchJobs() async {
+  Future<void> _fetchMapJobs() async {
     if (mounted) setState(() => _isJobsLoading = true);
 
     try {
       final response = await supabase.Supabase.instance.client
           .from('jobs')
-          .select();
+          .select('*');
       debugPrint('TOTAL JOBS FROM SUPABASE: ${response.length}');
 
-      final jobs = List<Map<String, dynamic>>.from(response).map((job) {
-        final normalizedJob = Map<String, dynamic>.from(job);
-        normalizedJob['company_name'] ??= normalizedJob['company'];
-        normalizedJob['job_type'] ??= normalizedJob['employment_type'];
-        normalizedJob['salary'] ??= normalizedJob['salary_amount'];
-
-        final rawLat = normalizedJob['latitude'] ?? normalizedJob['lat'];
-        final rawLng = normalizedJob['longitude'] ?? normalizedJob['lng'];
-        final lat = double.tryParse(rawLat?.toString() ?? '');
-        final lng = double.tryParse(rawLng?.toString() ?? '');
-        if (lat == null || lng == null) {
-          debugPrint(
-            'JOB SKIPPED (INVALID COORDS): '
-            'ID=${normalizedJob['id']}, '
-            'title=${normalizedJob['title']}, '
-            'lat=$rawLat, lng=$rawLng',
-          );
-        } else {
-          normalizedJob['point'] = LatLng(lat, lng);
-        }
-        return normalizedJob;
-      }).toList();
-
-      _allJobs = jobs.isEmpty ? _buildMockJobs() : jobs;
+      final rawJobs = List<Map<String, dynamic>>.from(response);
+      final jobs = _normalizeJobs(rawJobs);
+      final activeJobs = jobs.where(_shouldShowJobOnMap).toList();
+      final jobsMissingCoords = rawJobs.where((job) => _rawJobMissingCoordinates(job)).toList();
+      print('Fetched ${activeJobs.length} total active jobs. Jobs missing lat/lng: ${jobsMissingCoords.map(_jobDebugLabel).join(', ')}');
+      _allJobs = activeJobs.isEmpty ? _buildMockJobs() : activeJobs;
+      await _rebuildJobMarkers(_allJobs);
     } catch (error) {
       debugPrint('Error fetching jobs: $error');
       _allJobs = _buildMockJobs();
+      await _rebuildJobMarkers(_allJobs);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Elanlar yüklənmədi, demo məlumat göstərilir: $error')),
@@ -505,42 +485,195 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
     if (!mounted) return;
     setState(() => _isJobsLoading = false);
+    _syncClusterItems();
     debugPrint('LOADED JOBS COUNT: ${_allJobs.length}');
   }
 
-  Future<void> _loadUserLocation() async {
-    Position? position;
-    try {
-      position = await LocationService.GetCurrentLocation();
-    } catch (_) {
-      position = null;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _mapCenter = position == null
-              ? const LatLng(40.3750, 49.8430)
-              : LatLng(position.latitude, position.longitude);
-          _isMapLoading = false;
-        });
+  void _listenToJobs() {
+    _jobsSubscription?.cancel();
+    _jobsSubscription = supabase.Supabase.instance.client
+        .from('jobs')
+        .stream(primaryKey: ['id'])
+        .listen((rows) async {
+      final normalizedJobs = _normalizeJobs(rows);
+      final jobs = normalizedJobs.where(_shouldShowJobOnMap).toList();
+      final missingCoords = rows.where((job) => _rawJobMissingCoordinates(Map<String, dynamic>.from(job))).toList();
+      print('Fetched ${jobs.length} total active jobs. Jobs missing lat/lng: ${missingCoords.map((job) => _jobDebugLabel(Map<String, dynamic>.from(job))).join(', ')}');
+      if (!mounted) return;
+      setState(() {
+        _allJobs = jobs;
+        _isJobsLoading = false;
+      });
+      await _rebuildJobMarkers(jobs);
+      _syncClusterItems();
+    }, onError: (error) {
+      debugPrint('Jobs stream error: $error');
+    });
+  }
+
+  Future<void> _rebuildJobMarkers(List<Map<String, dynamic>> jobsList) async {
+    final Set<Marker> newMarkers = {};
+    LatLng? latestMarkerPosition;
+
+    for (var job in jobsList) {
+      final point = _jobPoint(job);
+
+      if (point != null) {
+        final position = point;
+        latestMarkerPosition = position;
+        final isVip = job['is_vip'] == true;
+        final jobId = job['id']?.toString() ?? UniqueKey().toString();
+        final salaryLabel = _formatMarkerSalary(job['salary']);
+        final categoryIcon = _markerCategoryIcon(job);
+        final markerKey = '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}';
+        final icon = _jobBadgeIcons[markerKey] ??= await _buildPillMarker(job);
+        newMarkers.add(
+          Marker(
+            markerId: MarkerId(jobId),
+            position: position,
+            infoWindow: InfoWindow.noText,
+            icon: icon,
+            onTap: () => _showJobBottomSheet(job),
+          ),
+        );
+      } else {
+        print('MAP MARKER SKIPPED: job=${_jobDebugLabel(job)} lat=${job['latitude']} lng=${job['longitude']} district=${job['district']} address=${job['address']}');
       }
     }
 
-    if (mounted && position != null) _moveTo(_mapCenter, 14.0);
+    if (!mounted) return;
+    setState(() {
+      _jobMarkers = Set<Marker>.from(newMarkers);
+      _clusterMarkers = Set<Marker>.from(newMarkers);
+    });
+    print('LOG: Total active markers set on map: ${newMarkers.length}');
+
+    if (latestMarkerPosition != null && _isMapReady && _mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(latestMarkerPosition, 14.5),
+      );
+    }
+  }
+
+  List<Map<String, dynamic>> _normalizeJobs(List<Map<String, dynamic>> rawJobs) {
+    return rawJobs.map((job) {
+      final normalizedJob = Map<String, dynamic>.from(job);
+      normalizedJob['business_name'] ??=
+          normalizedJob['company_name'] ?? normalizedJob['company'] ?? normalizedJob['title'];
+      normalizedJob['company_name'] ??= normalizedJob['business_name'];
+      normalizedJob['district'] ??= normalizedJob['area'] ?? '';
+      normalizedJob['instagram'] ??= normalizedJob['instagram_url'] ?? '';
+      normalizedJob['phone_whatsapp'] ??=
+          normalizedJob['phone'] ?? normalizedJob['whatsapp'] ?? normalizedJob['phone_number'] ?? '';
+      normalizedJob['contact_person'] ??= normalizedJob['contact_name'] ?? '';
+      normalizedJob['has_vacancy'] ??= normalizedJob['is_vacancy'] ?? true;
+      normalizedJob['is_vacancy'] ??= normalizedJob['has_vacancy'] ?? true;
+      normalizedJob['salary'] ??= normalizedJob['salary_amount'];
+      normalizedJob['schedule'] ??=
+          normalizedJob['employment_type'] ?? normalizedJob['job_type'] ?? 'Tam iş günü';
+      normalizedJob['job_type'] ??= normalizedJob['schedule'];
+      normalizedJob['response_status'] ??= normalizedJob['response'] ?? '';
+      normalizedJob['ad_status'] ??= normalizedJob['status'] ?? '';
+      normalizedJob['is_active'] ??= _jobBool(normalizedJob['is_active']) ||
+          ['active', 'approved'].contains(normalizedJob['ad_status']?.toString().toLowerCase().trim()) ||
+          ['active', 'approved'].contains(normalizedJob['status']?.toString().toLowerCase().trim());
+      normalizedJob['last_checked_at'] ??=
+          normalizedJob['updated_at'] ?? normalizedJob['created_at'];
+      final adStatus = normalizedJob['ad_status']?.toString().toLowerCase().trim() ?? '';
+      final hasVacancy = _jobHasVacancy(normalizedJob);
+      normalizedJob['is_verified'] ??= (adStatus == 'active' || _jobBool(normalizedJob['is_vip'])) && hasVacancy;
+
+      final resolved = JobLocationResolver.resolve(
+        district: normalizedJob['district']?.toString(),
+        address: normalizedJob['address']?.toString(),
+        latitude: _safeParseDouble(normalizedJob['latitude'] ?? normalizedJob['lat']),
+        longitude: _safeParseDouble(normalizedJob['longitude'] ?? normalizedJob['lng']),
+      );
+      normalizedJob['latitude'] ??= resolved.latitude;
+      normalizedJob['longitude'] ??= resolved.longitude;
+      normalizedJob['point'] ??= resolved;
+
+      if (_rawJobMissingCoordinates(job)) {
+        debugPrint(
+          'JOB SKIPPED (INVALID COORDS): '
+          'ID=${normalizedJob['id']}, '
+          'title=${normalizedJob['title']}, '
+          'lat=${normalizedJob['latitude']}, lng=${normalizedJob['longitude']}',
+        );
+      }
+      return normalizedJob;
+    }).toList();
+  }
+
+  bool _shouldShowJobOnMap(Map<String, dynamic> job) {
+    final adStatus = _jobText(job, 'ad_status', _jobText(job, 'status', '')).toLowerCase().trim();
+    if (adStatus == 'rejected' || adStatus == 'deleted') return false;
+    if (!_jobHasVacancy(job)) return false;
+    final isActiveFlag = _jobBool(job['is_active']);
+    return adStatus == 'active' || adStatus == 'approved' || isActiveFlag || _jobBool(job['is_vip']);
+  }
+
+  bool _rawJobMissingCoordinates(Map<String, dynamic> job) {
+    final lat = _safeParseDouble(job['latitude'] ?? job['lat']);
+    final lng = _safeParseDouble(job['longitude'] ?? job['lng']);
+    return lat == null || lng == null || lat == 0.0 || lng == 0.0;
+  }
+
+  String _jobDebugLabel(Map<String, dynamic> job) {
+    final id = job['id']?.toString() ?? '?';
+    final title = _jobText(job, 'title', _jobText(job, 'business_name', 'unknown'));
+    return '$id:$title';
+  }
+
+  Future<void> _loadUserLocation() async {
+    try {
+      final position = await LocationService.GetCurrentLocation();
+      if (position != null) {
+        _currentUserLocation = LatLng(position.latitude, position.longitude);
+        _mapCenter = _currentUserLocation!;
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() => _isMapLoading = false);
+      }
+    }
+  }
+
+  void _toggleMapType() {
+    setState(() {
+      _currentMapType = _currentMapType == MapType.normal
+          ? MapType.satellite
+          : MapType.normal;
+    });
+  }
+
+  Future<void> _recenterMyLocation() async {
+    final target = _currentUserLocation ?? _mapCenter;
+    if (_isMapReady && _mapController != null) {
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(target, 14.5),
+      );
+    }
   }
 
   void _moveTo(LatLng target, double zoom) {
-    if (_isMapReady) _mapController.move(target, zoom);
+    if (_isMapReady && _mapController != null) {
+  _mapController!.animateCamera(
+    CameraUpdate.newLatLngZoom(target, zoom.toDouble()),
+  );
+}
   }
 
   double _calculateDistance(LatLng first, LatLng second) {
     const degreesToRadians = 0.017453292519943295;
     final value = 0.5 -
-        cos((second.latitude - first.latitude) * degreesToRadians) / 2 +
-        cos(first.latitude * degreesToRadians) *
-            cos(second.latitude * degreesToRadians) *
-            (1 - cos((second.longitude - first.longitude) * degreesToRadians)) /
+      math.cos((second.latitude - first.latitude) * degreesToRadians) / 2 +
+      math.cos(first.latitude * degreesToRadians) *
+        math.cos(second.latitude * degreesToRadians) *
+        (1 - math.cos((second.longitude - first.longitude) * degreesToRadians)) /
             2;
-    return 12742 * asin(sqrt(value));
+    return 12742 * math.asin(math.sqrt(value));
   }
 
   String _jobText(Map<String, dynamic> job, String key, String fallback) {
@@ -559,9 +692,294 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return _safeParseDouble(value) ?? 0.0;
   }
 
+  String _jobSalaryString(Map<String, dynamic> job) {
+    final value = job['salary'] ?? job['salary_text'] ?? job['salary_amount'];
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty) {
+      final salary = _jobSalary(job);
+      return salary <= 0 ? 'Razılaşma ilə' : '${salary.round()} ₼';
+    }
+    return text.contains('₼') ? text : '$text ₼';
+  }
+
+  String _jobBusinessName(Map<String, dynamic> job) {
+    return _jobText(job, 'business_name', _jobText(job, 'company_name', _jobText(job, 'title', 'Şirkət')));
+  }
+
+  String _jobDistrict(Map<String, dynamic> job) {
+    return _jobText(job, 'district', '');
+  }
+
+  String _jobSchedule(Map<String, dynamic> job) {
+    return _jobText(job, 'schedule', _jobText(job, 'job_type', _jobText(job, 'employment_type', 'Tam iş günü')));
+  }
+
+  String _jobPhoneWhatsapp(Map<String, dynamic> job) {
+    return _jobText(job, 'phone_whatsapp', _jobText(job, 'phone', _jobText(job, 'whatsapp', '')));
+  }
+
+  String _jobInstagram(Map<String, dynamic> job) {
+    return _jobText(job, 'instagram', '');
+  }
+
+  bool _jobHasVacancy(Map<String, dynamic> job) {
+    final value = job['has_vacancy'] ?? job['is_vacancy'] ?? true;
+    if (value is bool) return value;
+    final normalized = value.toString().trim().toLowerCase();
+    return ['true', '1', 'yes', 'y'].contains(normalized);
+  }
+
+  bool _jobBool(dynamic value) {
+    if (value is bool) return value;
+    return ['true', '1', 'yes', 'y'].contains(value?.toString().toLowerCase().trim());
+  }
+
+  bool _jobIsVerified(Map<String, dynamic> job) {
+    final adStatus = _jobText(job, 'ad_status', _jobText(job, 'status', '')).toLowerCase();
+    return adStatus == 'active' && _jobHasVacancy(job);
+  }
+
+  String _jobResponseStatus(Map<String, dynamic> job) {
+    return _jobText(job, 'response_status', '');
+  }
+
+  String _jobAddress(Map<String, dynamic> job) {
+    return _jobText(job, 'address', appLang.translate('city_baku'));
+  }
+
+  String _jobLocationSummary(Map<String, dynamic> job) {
+    final district = _jobDistrict(job).trim();
+    final address = _jobAddress(job).trim();
+    if (district.isNotEmpty && address.isNotEmpty) {
+      return '$district • $address';
+    }
+    return district.isNotEmpty ? district : address;
+  }
+
+  String _jobContactPerson(Map<String, dynamic> job) {
+    return _jobText(job, 'contact_person', '');
+  }
+
+  Future<void> _launchPhoneAction(
+    String phone, {
+    bool useWhatsApp = false,
+  }) async {
+    final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (digits.isEmpty) return;
+    final uri = useWhatsApp
+        ? Uri.parse('https://wa.me/${digits.replaceAll('+', '')}')
+        : Uri.parse('tel:$digits');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _launchInstagram(String instagram) async {
+    if (instagram.trim().isEmpty) return;
+    final value = instagram.trim();
+    final uri = value.startsWith('http')
+        ? Uri.parse(value)
+        : Uri.parse('https://instagram.com/${value.replaceAll('@', '')}');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   String _jobSalaryLabel(Map<String, dynamic> job) {
     final salary = _jobSalary(job);
     return salary <= 0 ? 'Razılaşma ilə' : '${salary.round()} ₼';
+  }
+
+  List<Map<String, dynamic>> get _jobs => _allJobs;
+
+  List<_JobClusterItem> _buildClusterItems() {
+    return _jobs.where((job) {
+      return _jobPoint(job) != null && _shouldShowJobOnMap(job);
+    }).map((job) {
+      final point = _jobPoint(job)!;
+      return _JobClusterItem(job: job, point: point);
+    }).toList();
+  }
+
+  void _syncClusterItems() {
+    final items = _buildClusterItems();
+    _clusterManager.setItems(items);
+    if (_isMapReady) {
+      _clusterManager.updateMap();
+    }
+  }
+
+  void _updateClusterMarkers(Set<Marker> markers) {
+    if (!mounted) return;
+    setState(() {
+      _clusterMarkers = markers;
+      _jobMarkers = {};
+    });
+    print('Loaded ${markers.length} markers to map');
+  }
+
+  String _singleMarkerKey(String salaryLabel, IconData icon) {
+    return '$salaryLabel|${icon.codePoint}|${icon.fontFamily}|${icon.fontPackage}';
+  }
+
+  String _clusterBadgeKey(int count) => 'cluster|$count';
+
+  Future<BitmapDescriptor> _buildPillMarker(Map<String, dynamic> job) async {
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) {
+      throw StateError('No overlay available for marker rendering');
+    }
+
+    final double pixelRatio = 1.5;
+
+    final GlobalKey boundaryKey = GlobalKey();
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        return Positioned(
+          left: -10000,
+          top: -10000,
+          child: Material(
+            color: Colors.transparent,
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: RepaintBoundary(
+                key: boundaryKey,
+                child: _buildMarkerWidget(job),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    overlay.insert(entry);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      final boundary = boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) {
+        throw StateError('Failed to locate marker boundary');
+      }
+
+      final ui.Image image = await boundary.toImage(
+        pixelRatio: pixelRatio,
+      );
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        throw StateError('Failed to encode marker bitmap');
+      }
+      return BitmapDescriptor.bytes(byteData.buffer.asUint8List());
+    } finally {
+      entry.remove();
+    }
+  }
+
+  Future<Marker> _clusterMarkerBuilder(cm.Cluster<_JobClusterItem> cluster) async {
+    if (cluster.isMultiple) {
+      final key = _clusterBadgeKey(cluster.count);
+      final icon = _clusterBadgeIcons[key] ??=
+          BitmapDescriptor.bytes(await createClusterBadgeMarker(cluster.count));
+      return Marker(
+        markerId: MarkerId(cluster.getId()),
+        position: cluster.location,
+        anchor: const Offset(0.5, 0.5),
+        icon: icon,
+        infoWindow: InfoWindow.noText,
+        onTap: () {
+          final targetZoom = (_currentZoom + 2.0).clamp(0.0, 18.0).toDouble();
+          _moveTo(cluster.location, targetZoom);
+        },
+      );
+    }
+
+    final item = cluster.items.first;
+    final job = item.job;
+    final jobId = job['id']?.toString() ?? cluster.getId();
+    final isVip = job['is_vip'] == true;
+    final salaryLabel = _formatMarkerSalary(job['salary']);
+    final categoryIcon = _markerCategoryIcon(job);
+    final icon = _singleMarkerIcons['$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}'] ??= await _buildPillMarker(job);
+
+    return Marker(
+      markerId: MarkerId(jobId),
+      position: item.location,
+      anchor: const Offset(0.5, 1.0),
+      icon: icon,
+      infoWindow: InfoWindow.noText,
+      onTap: () {
+        setState(() => _selectedJobId = jobId);
+        _showJobBottomSheet(job);
+      },
+    );
+  }
+
+  Future<Uint8List> createClusterBadgeMarker(int count) async {
+    final label = count.toString();
+    final textStyle = const TextStyle(
+      color: Colors.white,
+      fontSize: 10,
+      fontWeight: FontWeight.bold,
+    );
+    final textPainter = TextPainter(
+      text: TextSpan(text: label, style: textStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    const double width = 36;
+    const double height = 36;
+    const double padding = 2;
+    const double circleSize = 32;
+    final double pixelRatio = 1.5;
+
+    canvas.scale(pixelRatio, pixelRatio);
+    canvas.translate(padding, padding);
+
+    final bgPaint = Paint()
+      ..color = const Color(0xFF181A20)
+      ..style = PaintingStyle.fill;
+    final borderPaint = Paint()
+      ..color = const Color(0xFF3B82F6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final center = const Offset(circleSize / 2, circleSize / 2);
+    canvas.drawCircle(center, circleSize / 2, bgPaint);
+    canvas.drawCircle(center, circleSize / 2, borderPaint);
+
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(Icons.layers.codePoint),
+        style: TextStyle(
+          fontFamily: Icons.layers.fontFamily,
+          package: Icons.layers.fontPackage,
+          color: const Color(0xFF38BDF8),
+          fontSize: 10,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+
+    final contentWidth = iconPainter.width + 3 + textPainter.width;
+    final startX = (circleSize - contentWidth) / 2;
+    final iconY = (circleSize - iconPainter.height) / 2 - 0.5;
+    final textY = (circleSize - textPainter.height) / 2 - 0.5;
+
+    iconPainter.paint(canvas, Offset(startX, iconY));
+    textPainter.paint(
+      canvas,
+      Offset(startX + iconPainter.width + 3, textY),
+    );
+
+    final image = await recorder.endRecording().toImage(
+      (width * pixelRatio).ceil(),
+      (height * pixelRatio).ceil(),
+    );
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
   }
 
   IconData _getCategoryIcon(String? category) {
@@ -594,15 +1012,64 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (point is LatLng) return point;
     final latitude = (job['latitude'] ?? job['lat']);
     final longitude = (job['longitude'] ?? job['lng']);
-    final lat = _safeParseDouble(latitude);
-    final lng = _safeParseDouble(longitude);
-    return lat == null || lng == null ? null : LatLng(lat, lng);
+    final lat = double.tryParse(latitude?.toString() ?? '') ?? 0.0;
+    final lng = double.tryParse(longitude?.toString() ?? '') ?? 0.0;
+    if (lat == 0.0 || lng == 0.0) return null;
+    return LatLng(lat, lng);
   }
 
   IconData _jobIcon(Map<String, dynamic> job) {
     return job['icon'] is IconData
         ? job['icon'] as IconData
         : Icons.work_outline_rounded;
+  }
+
+  String _formatMarkerSalary(dynamic salaryValue) {
+    final raw = salaryValue?.toString().trim() ?? '';
+    if (raw.isEmpty) return '0 ₼';
+
+    final cleaned = raw
+        .replaceAll(RegExp(r'\b(AZN|MANAT)\b', caseSensitive: false), '')
+        .replaceAll('₼', '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+
+    return cleaned.isEmpty ? '0 ₼' : '$cleaned ₼';
+  }
+
+  IconData _markerCategoryIcon(Map<String, dynamic> job) {
+    final raw = [
+      job['category'],
+      job['category_id'],
+      job['categoryId'],
+      job['category_name'],
+    ]
+        .where((value) => value != null)
+        .map((value) => value.toString().toLowerCase())
+        .join(' ');
+
+    bool hasAny(List<String> needles) => needles.any(raw.contains);
+
+    if (hasAny(['courier', 'delivery', 'çatdır', 'logistics', 'logistika'])) {
+      return Icons.two_wheeler;
+    }
+    if (hasAny(['cafe', 'barista', 'kafe', 'coffee'])) {
+      return Icons.local_cafe;
+    }
+    if (hasAny(['restaurant', 'waiter', 'restoran', 'garson'])) {
+      return Icons.restaurant;
+    }
+    if (hasAny(['retail', 'clothes', 'fashion', 'satış', 'shop', 'store'])) {
+      return Icons.checkroom;
+    }
+    if (hasAny(['office', 'admin', 'ofis', 'inzibati', 'assistant', 'clerical'])) {
+      return Icons.business_center;
+    }
+    if (hasAny(['tech', 'it', 'software', 'program', 'proqram', 'developer'])) {
+      return Icons.laptop;
+    }
+
+    return Icons.work_outline;
   }
 
   _CategoryMeta _categoryMeta(String? rawCategory) {
@@ -643,59 +1110,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return const _CategoryMeta(Color(0xFF2979FF), Icons.work_rounded);
   }
 
-  List<Marker> _buildMarkers() {
-    return _allJobs.where((job) => _jobPoint(job) != null).map((job) {
-      final point = _jobPoint(job)!;
-      final jobId = job['id']?.toString();
-      final isSelected =
-          _selectedJobId != null && _selectedJobId == jobId;
-      return Marker(
-        point: latlong.LatLng(point.latitude, point.longitude),
-        width: 130,
-        height: 40,
-        child: _JobMarkerBadge(
-          meta: _categoryMeta(job['category']?.toString()),
-          salaryLabel: _jobSalaryLabel(job),
-          isSelected: isSelected,
-          onTap: () {
-            setState(() => _selectedJobId = jobId);
-            _centerAndShowJob(job);
-          },
-        ),
-      );
-    }).toList();
-  }
-
-  Widget _buildClusterBadge(int count) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          colors: [Color(0xFF2563EB), Color(0xFF1E3A8A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: Colors.white, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2563EB).withOpacity(0.7),
-            blurRadius: 14,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        '+$count',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
-
   List<Map<String, dynamic>> _buildMockJobs() {
     return mockJobs.map((job) {
       final rawCategory = job['category']?.toString() ?? 'Kafe & Restoran';
@@ -734,14 +1148,26 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       return {
         'id': 'demo_${mockJobs.indexOf(job) + 1}',
         'status': 'active',
+        'business_name': job['companyName'] ?? 'Şirkət',
         'company_name': job['companyName'] ?? 'Şirkət',
         'title': job['title'] ?? 'Vakansiya',
-        'salary': salaryValue,
+        'district': '',
+        'instagram': '',
+        'phone_whatsapp': '',
+        'contact_person': '',
+        'has_vacancy': true,
+        'salary': rawSalary,
+        'salary_amount': salaryValue,
+        'schedule': jobType == 'full_time' ? 'Tam iş günü' : 'Növbəli',
+        'employment_type': jobType == 'full_time' ? 'Tam iş günü' : 'Növbəli',
         'salary_text': rawSalary,
         'category': category,
         'job_type': jobType,
         'point': LatLng(latitude, longitude),
         'address': job['address'] ?? 'Bakı',
+        'response_status': 'responded',
+        'ad_status': 'active',
+        'last_checked_at': DateTime.now().toIso8601String(),
         'is_verified': true,
         'posted_time': 'Bugün',
         'icon': _getCategoryIcon(category),
@@ -754,7 +1180,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final query = _searchController.text.toLowerCase().trim();
     return _allJobs.where((job) {
       final point = _jobPoint(job);
-      if (point == null) return false;
+      if (point == null || !_shouldShowJobOnMap(job)) return false;
       final title = _jobText(job, 'title', 'Vakansiya').toLowerCase();
       final company = _jobText(job, 'company_name', 'Şirkət').toLowerCase();
       final salary = _jobSalary(job);
@@ -782,6 +1208,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 180));
     if (!mounted) return;
     _showJobDetailsBottomSheet(job);
+  }
+
+  void _showJobBottomSheet(Map<String, dynamic> job) {
+    _centerAndShowJob(job);
   }
 
   Future<void> _applyForJob(Map<String, dynamic> job) async {
@@ -834,34 +1264,34 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               RepaintBoundary(
                 child: _isMapLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: const latlong.LatLng(40.4093, 49.8671),
-                          initialZoom: 12.0,
-                          onMapReady: () {
-                            _isMapReady = true;
-                            _moveTo(_mapCenter, 13);
-                          },
+                    : GoogleMap(
+                        initialCameraPosition: const CameraPosition(
+                          target: _bakuYouthHubCenter,
+                          zoom: 12.8,
                         ),
-                        children: [
-                          TileLayer(
-                            urlTemplate: _isSatelliteMode
-                                ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                                : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.example.workspot',
-                          ),
-                          MarkerClusterLayerWidget(
-                            options: MarkerClusterLayerOptions(
-                              maxClusterRadius: 55,
-                              size: const Size(46, 46),
-                              markers: _buildMarkers(),
-                              builder: (context, clusterMarkers) =>
-                                  _buildClusterBadge(clusterMarkers.length),
-                            ),
-                          ),
-                        ],
-                      ),
+                        onMapCreated: (GoogleMapController controller) {
+                          _clusterManager.setMapId(controller.mapId);
+                          setState(() {
+                            _isMapReady = true;
+                          });
+                          _mapController = controller;
+                          _syncClusterItems();
+                        },
+                        onCameraMove: (cameraPosition) {
+                          _currentZoom = cameraPosition.zoom;
+                          _mapCenter = cameraPosition.target;
+                          _clusterManager.onCameraMove(cameraPosition);
+                        },
+                        onCameraIdle: _clusterManager.updateMap,
+                        markers: _clusterMarkers,
+                        myLocationEnabled: true,
+                        myLocationButtonEnabled: false,
+                        zoomControlsEnabled: false,
+                        mapToolbarEnabled: false,
+                        compassEnabled: false,
+                        mapType: _currentMapType,
+                      )
+                       
               ),
               RepaintBoundary(
                 child: SafeArea(
@@ -935,17 +1365,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const AdminApprovalScreen()),
+                      builder: (context) => const AdminDashboardScreen()),
                 );
-                if (mounted) await _fetchJobs();
+                if (mounted) await _fetchMapJobs();
               },
             ),
             IconButton(
               icon: const Icon(Icons.notifications_none_rounded),
-              onPressed: () => Navigator.push(
+              onPressed: () async {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => const NotificationsScreen())),
+                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                );
+                if (mounted) await _fetchMapJobs();
+              },
             ),
             IconButton(
               icon: const Icon(Icons.add_circle_outline_rounded,
@@ -959,7 +1392,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         builder: (_) => const AddJobScreen()),
                   );
                   if (!mounted || !context.mounted) return;
-                  await _fetchJobs();
+                  await _fetchMapJobs();
                 } catch (error) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -970,8 +1403,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.person_outline_rounded),
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen())),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                );
+                if (mounted) await _fetchMapJobs();
+              },
             ),
             const SizedBox(width: 4),
           ],
@@ -1155,7 +1593,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               selectedColor: const Color(0xFF2563EB),
               onSelected: (_) async {
                 setState(() => _selectedCategory = category);
-                await _fetchJobs();
+                await _fetchMapJobs();
               },
             ),
           );
@@ -1166,57 +1604,27 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   Widget _buildMapActions(List<Map<String, dynamic>> jobs, bool isDark) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        FloatingActionButton.small(
-          heroTag: 'refresh_jobs',
-          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-          foregroundColor: const Color(0xFF2563EB),
-          tooltip: 'Elanları yenilə',
-          onPressed: _isJobsLoading ? null : _fetchJobs,
-          child: _isJobsLoading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.refresh_rounded),
-        ),
-        const SizedBox(height: 8),
-        FloatingActionButton.small(
+        _MapActionButton(
           heroTag: 'satellite_toggle',
-          backgroundColor: _isSatelliteMode
-              ? const Color(0xFF2563EB)
-              : (isDark ? const Color(0xFF1E293B) : Colors.white),
-          foregroundColor:
-              _isSatelliteMode ? Colors.white : const Color(0xFF2563EB),
-          tooltip: _isSatelliteMode
-              ? appLang.translate('vector_mode')
-              : appLang.translate('satellite_mode'),
-          onPressed: () {
-            if (!mounted) return;
-            setState(() => _isSatelliteMode = !_isSatelliteMode);
-          },
-          child: Icon(_isSatelliteMode
-              ? Icons.map_rounded
-              : Icons.satellite_alt_rounded),
+          icon: _currentMapType == MapType.normal
+              ? Icons.satellite_alt_rounded
+              : Icons.map_rounded,
+          tooltip: _currentMapType == MapType.normal
+              ? appLang.translate('satellite_mode')
+              : appLang.translate('vector_mode'),
+          onPressed: _toggleMapType,
+          isActive: _currentMapType == MapType.satellite,
         ),
-        const SizedBox(height: 8),
-        FloatingActionButton.small(
-          heroTag: 'job_list',
-          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-          foregroundColor: const Color(0xFF2563EB),
-          tooltip: appLang.translate('found_jobs'),
-          onPressed: () => _showJobsListBottomSheet(jobs, isDark),
-          child: const Icon(Icons.format_list_bulleted_rounded),
-        ),
-        const SizedBox(height: 8),
-        FloatingActionButton(
+        const SizedBox(height: 10),
+        _MapActionButton(
           heroTag: 'my_location',
-          backgroundColor: const Color(0xFF2563EB),
-          foregroundColor: Colors.white,
+          icon: Icons.my_location_rounded,
           tooltip: 'Mövqeyim',
-          onPressed: () => _moveTo(_mapCenter, 14.5),
-          child: const Icon(Icons.my_location_rounded),
+          onPressed: _recenterMyLocation,
+          isActive: false,
         ),
       ],
     );
@@ -1281,22 +1689,54 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _jobText(job, 'title', 'Vakansiya'),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _jobBusinessName(job),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            if (_jobIsVerified(job))
+                              Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF16A34A).withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.35)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.verified_rounded, size: 13, color: Color(0xFF22C55E)),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Aktiv Vakansiya',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _jobText(job, 'company_name', 'Şirkət'),
+                          _jobText(job, 'category', 'General'),
                           style: const TextStyle(
                             fontSize: 13,
-                            color: Color(0xFF94A3B8),
+                            color: Color(0xFF60A5FA),
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -1304,30 +1744,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
               const SizedBox(height: 18),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2563EB),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      _jobText(job, 'salary_text', '${_jobSalary(job)} AZN'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _jobTag(_jobText(job, 'job_type', 'Tam iş günü')),
-                  const SizedBox(width: 8),
-                    _jobTag(_jobText(
-                      job, 'posted_time', appLang.translate('status_new'))),
+                  _jobTag(_jobDistrict(job).isEmpty ? _jobAddress(job) : _jobDistrict(job)),
+                  _jobTag(_jobSchedule(job)),
+                  _jobTag(_jobSalaryString(job)),
+                  if (_jobResponseStatus(job).isNotEmpty) _jobTag(_jobResponseStatus(job)),
                 ],
               ),
               const SizedBox(height: 14),
@@ -1338,18 +1763,33 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                        _jobText(
-                          job, 'address', appLang.translate('city_baku')),
+                      _jobLocationSummary(job),
                       style: const TextStyle(
                           color: Color(0xFFCBD5E1), fontSize: 13),
                     ),
                   ),
                 ],
               ),
+              if (_jobContactPerson(job).isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.person_outline_rounded,
+                        color: Color(0xFF64748B), size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Əlaqədar şəxs: ${_jobContactPerson(job)}',
+                        style: const TextStyle(
+                            color: Color(0xFF94A3B8), fontSize: 12.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 14),
               Text(
-                _jobText(
-                  job, 'description', appLang.translate('no_description')),
+                _jobText(job, 'description', appLang.translate('no_description')),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -1359,29 +1799,31 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.pop(sheetContext);
-                        _openFullJobDetails(job);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0xFF475569)),
+                    child: ElevatedButton.icon(
+                      onPressed: () => _launchPhoneAction(
+                        _jobPhoneWhatsapp(job),
+                        useWhatsApp: true,
+                      ),
+                      icon: const Icon(Icons.chat_bubble_rounded,
+                          color: Colors.white, size: 17),
+                      label: const Text('WhatsApp',
+                          style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF16A34A),
                         minimumSize: const Size(0, 48),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: Text(appLang.translate('view_details')),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _applyForJob(job),
-                      icon: const Icon(Icons.send_rounded,
+                      onPressed: () => _launchPhoneAction(_jobPhoneWhatsapp(job)),
+                      icon: const Icon(Icons.call_rounded,
                           color: Colors.white, size: 17),
-                      label: Text(appLang.translate('apply_now'),
-                          style: const TextStyle(color: Colors.white)),
+                      label: const Text('Call',
+                          style: TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF2563EB),
                         minimumSize: const Size(0, 48),
@@ -1392,6 +1834,57 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              if (_jobInstagram(job).isNotEmpty) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _launchInstagram(_jobInstagram(job)),
+                    child: Container(
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF2D1B69), Color(0xFF7E22CE)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFF472B6).withOpacity(0.7),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF7E22CE).withOpacity(0.22),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.camera_alt_rounded,
+                              size: 17, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text(
+                            'Instagram',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -1431,19 +1924,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => CompanyDetailsScreen(
-          companyName: _jobText(job, 'company_name', 'Şirkət'),
+          companyName: _jobBusinessName(job),
           companyJobs: [
-            JobModel(
-              id: job['id']?.toString() ?? '',
-              title: _jobText(job, 'title', 'Vakansiya'),
-              companyName: _jobText(job, 'company_name', 'Şirkət'),
-              category: _jobText(job, 'category', 'Digər'),
-              employmentType: _jobText(job, 'job_type', 'Tam iş günü'),
-              salaryAmount: _jobSalary(job),
-              lat: _jobPoint(job)?.latitude ?? 40.3725,
-              lng: _jobPoint(job)?.longitude ?? 49.8372,
-              distanceMeters: 0,
-            ),
+            JobModel.fromJson(job),
           ],
         ),
       ),
@@ -1519,6 +2002,59 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _MapActionButton extends StatelessWidget {
+  final String heroTag;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+  final bool isActive;
+
+  const _MapActionButton({
+    required this.heroTag,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    required this.isActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = isActive
+      ? const Color(0xFF2563EB).withValues(alpha: 0.96)
+      : const Color(0xFF18181B).withValues(alpha: 0.78);
+
+    return SizedBox(
+      width: 46,
+      height: 46,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onPressed,
+            child: Container(
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 14,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Icon(icon, color: Colors.white, size: 21),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
