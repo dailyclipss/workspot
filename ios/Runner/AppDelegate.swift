@@ -4,7 +4,7 @@ import GoogleMaps
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  private let googleMapsAPIKey = "AIzaSyAa8tlpQVjOFshZx_QZqyYPgBXMc_vLnEY"
+  private let googleMapsAPIKey = "AIzaSyBVxBSwR4qPRAW7oHdRrCZEiZ1afkPsd5I"
 
   override func application(
     _ application: UIApplication,
