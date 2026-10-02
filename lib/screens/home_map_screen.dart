@@ -126,6 +126,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   LatLng? _currentUserLocation;
   double _currentZoom = 12.8;
   bool _isMapLoading = true;
+  String? _mapDebugMessage;
   bool _isJobsLoading = false;
   MapType _currentMapType = MapType.normal;
   bool _isFilterOpen = false;
@@ -435,6 +436,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     _loadUserLocation();
     _fetchMapJobs();
     _listenToJobs();
+    Future<void>.delayed(const Duration(seconds: 8)).then((_) {
+      if (!mounted || _isMapReady || (_mapDebugMessage?.isNotEmpty ?? false)) {
+        return;
+      }
+      _setMapDebugMessage(
+        'Google Maps has not initialized yet. Check the iOS API key and native startup logs.',
+      );
+    });
     if (widget.flashMessage != null && widget.flashMessage!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -457,6 +466,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (mounted) setState(() {});
   }
 
+  void _setMapDebugMessage(String message) {
+    debugPrint('[GoogleMaps][MapScreen] $message');
+    if (!mounted) return;
+    setState(() {
+      _mapDebugMessage = message;
+    });
+  }
+
+  void _clearMapDebugMessage() {
+    if (!mounted || _mapDebugMessage == null) return;
+    setState(() {
+      _mapDebugMessage = null;
+    });
+  }
+
   Future<void> _fetchMapJobs() async {
     if (mounted) setState(() => _isJobsLoading = true);
 
@@ -472,9 +496,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final jobsMissingCoords = rawJobs.where((job) => _rawJobMissingCoordinates(job)).toList();
       print('Fetched ${activeJobs.length} total active jobs. Jobs missing lat/lng: ${jobsMissingCoords.map(_jobDebugLabel).join(', ')}');
       _allJobs = activeJobs.isEmpty ? _buildMockJobs() : activeJobs;
+      _clearMapDebugMessage();
       await _rebuildJobMarkers(_allJobs);
     } catch (error) {
       debugPrint('Error fetching jobs: $error');
+      _setMapDebugMessage('Job fetch error: $error');
       _allJobs = _buildMockJobs();
       await _rebuildJobMarkers(_allJobs);
       if (!mounted) return;
@@ -500,6 +526,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final missingCoords = rows.where((job) => _rawJobMissingCoordinates(Map<String, dynamic>.from(job))).toList();
       print('Fetched ${jobs.length} total active jobs. Jobs missing lat/lng: ${missingCoords.map((job) => _jobDebugLabel(Map<String, dynamic>.from(job))).join(', ')}');
       if (!mounted) return;
+      _clearMapDebugMessage();
       setState(() {
         _allJobs = jobs;
         _isJobsLoading = false;
@@ -508,6 +535,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       _syncClusterItems();
     }, onError: (error) {
       debugPrint('Jobs stream error: $error');
+      _setMapDebugMessage('Jobs stream error: $error');
     });
   }
 
@@ -1257,42 +1285,92 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       builder: (context, child) {
         final isDark = _isDark;
         final filteredJobs = _filteredJobs;
+        Widget mapSurface;
+        try {
+          mapSurface = RepaintBoundary(
+            child: _isMapLoading
+                ? const Center(child: CircularProgressIndicator())
+                : GoogleMap(
+                    initialCameraPosition: const CameraPosition(
+                      target: _bakuYouthHubCenter,
+                      zoom: 12.8,
+                    ),
+                    onMapCreated: (GoogleMapController controller) {
+                      try {
+                        _clusterManager.setMapId(controller.mapId);
+                        setState(() {
+                          _isMapReady = true;
+                        });
+                        _mapController = controller;
+                        _clearMapDebugMessage();
+                        _syncClusterItems();
+                      } catch (error) {
+                        _setMapDebugMessage('Map initialization error: $error');
+                      }
+                    },
+                    onCameraMove: (cameraPosition) {
+                      try {
+                        _currentZoom = cameraPosition.zoom;
+                        _mapCenter = cameraPosition.target;
+                        _clusterManager.onCameraMove(cameraPosition);
+                      } catch (error) {
+                        _setMapDebugMessage('Map camera update error: $error');
+                      }
+                    },
+                    onCameraIdle: () {
+                      try {
+                        _clusterManager.updateMap();
+                      } catch (error) {
+                        _setMapDebugMessage('Map cluster update error: $error');
+                      }
+                    },
+                    markers: _clusterMarkers,
+                    myLocationEnabled: true,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    mapToolbarEnabled: false,
+                    compassEnabled: false,
+                    mapType: _currentMapType,
+                  ),
+          );
+        } catch (error) {
+          _setMapDebugMessage('Map build error: $error');
+          mapSurface = Container(
+            color: const Color(0xFF0F172A),
+            alignment: Alignment.center,
+            child: const Icon(Icons.map_outlined, color: Colors.white54, size: 44),
+          );
+        }
 
         return Scaffold(
           body: Stack(
             children: [
-              RepaintBoundary(
-                child: _isMapLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : GoogleMap(
-                        initialCameraPosition: const CameraPosition(
-                          target: _bakuYouthHubCenter,
-                          zoom: 12.8,
+              Positioned.fill(child: mapSurface),
+              if (_mapDebugMessage != null)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  top: MediaQuery.of(context).padding.top + 12,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.82),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFEF4444), width: 1.0),
+                      ),
+                      child: Text(
+                        _mapDebugMessage!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
                         ),
-                        onMapCreated: (GoogleMapController controller) {
-                          _clusterManager.setMapId(controller.mapId);
-                          setState(() {
-                            _isMapReady = true;
-                          });
-                          _mapController = controller;
-                          _syncClusterItems();
-                        },
-                        onCameraMove: (cameraPosition) {
-                          _currentZoom = cameraPosition.zoom;
-                          _mapCenter = cameraPosition.target;
-                          _clusterManager.onCameraMove(cameraPosition);
-                        },
-                        onCameraIdle: _clusterManager.updateMap,
-                        markers: _clusterMarkers,
-                        myLocationEnabled: true,
-                        myLocationButtonEnabled: false,
-                        zoomControlsEnabled: false,
-                        mapToolbarEnabled: false,
-                        compassEnabled: false,
-                        mapType: _currentMapType,
-                      )
-                       
-              ),
+                      ),
+                    ),
+                  ),
+                ),
               RepaintBoundary(
                 child: SafeArea(
                   child: Column(
