@@ -143,6 +143,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   late final cm.ClusterManager<_JobClusterItem> _clusterManager;
   StreamSubscription<List<Map<String, dynamic>>>? _jobsSubscription;
   String? _selectedJobId;
+  OverlayEntry? _jobDetailOverlayEntry;
 
   final List<String> _categories = const [
     'all',
@@ -1718,256 +1719,313 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     });
   }
 
+  void _dismissJobDetailsOverlay() {
+    _jobDetailOverlayEntry?.remove();
+    _jobDetailOverlayEntry = null;
+  }
+
   void _showJobDetailsBottomSheet(Map<String, dynamic> job) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      barrierColor: Colors.transparent,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Container(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          decoration: const BoxDecoration(
-            color: Color(0xFF0F172A),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    _dismissJobDetailsOverlay();
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+    if (overlay == null) {
+      debugPrint('Unable to show job overlay: no root overlay found.');
+      return;
+    }
+
+    _jobDetailOverlayEntry = OverlayEntry(
+      builder: (overlayContext) {
+        return Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Container(color: Colors.transparent),
+                ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: _buildJobDetailsCard(
+                      job,
+                      onClose: _dismissJobDetailsOverlay,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+        );
+      },
+    );
+
+    overlay.insert(_jobDetailOverlayEntry!);
+  }
+
+  Widget _buildJobDetailsCard(
+    Map<String, dynamic> job, {
+    required VoidCallback onClose,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F172A),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 24,
+            offset: Offset(0, -8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              const Center(
-                child: SizedBox(
-                  width: 38,
-                  height: 4,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Color(0xFF64748B),
-                      borderRadius: BorderRadius.all(Radius.circular(2)),
+              const Expanded(
+                child: Center(
+                  child: SizedBox(
+                    width: 38,
+                    height: 4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Color(0xFF64748B),
+                        borderRadius: BorderRadius.all(Radius.circular(2)),
+                      ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      _jobIcon(job),
-                      color: const Color(0xFF60A5FA),
-                      size: 26,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              IconButton(
+                onPressed: onClose,
+                icon: const Icon(Icons.close_rounded, color: Color(0xFFCBD5E1)),
+                tooltip: 'Close',
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  _jobIcon(job),
+                  color: const Color(0xFF60A5FA),
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _jobBusinessName(job),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
+                        Expanded(
+                          child: Text(
+                            _jobBusinessName(job),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
-                            if (_jobIsVerified(job))
-                              Container(
-                                margin: const EdgeInsets.only(left: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF16A34A).withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.35)),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.verified_rounded, size: 13, color: Color(0xFF22C55E)),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Aktiv Vakansiya',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _jobText(job, 'category', 'General'),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF60A5FA),
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
+                        if (_jobIsVerified(job))
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF16A34A).withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.35)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.verified_rounded, size: 13, color: Color(0xFF22C55E)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Aktiv Vakansiya',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _jobTag(_jobDistrict(job).isEmpty ? _jobAddress(job) : _jobDistrict(job)),
-                  _jobTag(_jobSchedule(job)),
-                  _jobTag(_jobSalaryString(job)),
-                  if (_jobResponseStatus(job).isNotEmpty) _jobTag(_jobResponseStatus(job)),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  const Icon(Icons.location_on_outlined,
-                      color: Color(0xFF60A5FA), size: 19),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      _jobLocationSummary(job),
+                    const SizedBox(height: 4),
+                    Text(
+                      _jobText(job, 'category', 'General'),
                       style: const TextStyle(
-                          color: Color(0xFFCBD5E1), fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-              if (_jobContactPerson(job).isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.person_outline_rounded,
-                        color: Color(0xFF64748B), size: 18),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Əlaqədar şəxs: ${_jobContactPerson(job)}',
-                        style: const TextStyle(
-                            color: Color(0xFF94A3B8), fontSize: 12.5),
+                        fontSize: 13,
+                        color: Color(0xFF60A5FA),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
-              ],
-              const SizedBox(height: 14),
-              Text(
-                _jobText(job, 'description', appLang.translate('no_description')),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Color(0xFF94A3B8), fontSize: 13, height: 1.35),
               ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _launchPhoneAction(
-                        _jobPhoneWhatsapp(job),
-                        useWhatsApp: true,
-                      ),
-                      icon: const Icon(Icons.chat_bubble_rounded,
-                          color: Colors.white, size: 17),
-                      label: const Text('WhatsApp',
-                          style: TextStyle(color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF16A34A),
-                        minimumSize: const Size(0, 48),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _launchPhoneAction(_jobPhoneWhatsapp(job)),
-                      icon: const Icon(Icons.call_rounded,
-                          color: Colors.white, size: 17),
-                      label: const Text('Call',
-                          style: TextStyle(color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        minimumSize: const Size(0, 48),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ],
+            ],
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _jobTag(_jobDistrict(job).isEmpty ? _jobAddress(job) : _jobDistrict(job)),
+              _jobTag(_jobSchedule(job)),
+              _jobTag(_jobSalaryString(job)),
+              if (_jobResponseStatus(job).isNotEmpty) _jobTag(_jobResponseStatus(job)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              const Icon(Icons.location_on_outlined,
+                  color: Color(0xFF60A5FA), size: 19),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _jobLocationSummary(job),
+                  style: const TextStyle(
+                      color: Color(0xFFCBD5E1), fontSize: 13),
+                ),
               ),
-              const SizedBox(height: 10),
-              if (_jobInstagram(job).isNotEmpty) ...[
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _launchInstagram(_jobInstagram(job)),
-                    child: Container(
-                      height: 48,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF2D1B69), Color(0xFF7E22CE)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFF472B6).withOpacity(0.7),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF7E22CE).withOpacity(0.22),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.camera_alt_rounded,
-                              size: 17, color: Colors.white),
-                          SizedBox(width: 8),
-                          Text(
-                            'Instagram',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+            ],
+          ),
+          if (_jobContactPerson(job).isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.person_outline_rounded,
+                    color: Color(0xFF64748B), size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Əlaqədar şəxs: ${_jobContactPerson(job)}',
+                    style: const TextStyle(
+                        color: Color(0xFF94A3B8), fontSize: 12.5),
                   ),
                 ),
               ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          Text(
+            _jobText(job, 'description', appLang.translate('no_description')),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                color: Color(0xFF94A3B8), fontSize: 13, height: 1.35),
+          ),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _launchPhoneAction(
+                    _jobPhoneWhatsapp(job),
+                    useWhatsApp: true,
+                  ),
+                  icon: const Icon(Icons.chat_bubble_rounded,
+                      color: Colors.white, size: 17),
+                  label: const Text('WhatsApp',
+                      style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    minimumSize: const Size(0, 48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _launchPhoneAction(_jobPhoneWhatsapp(job)),
+                  icon: const Icon(Icons.call_rounded,
+                      color: Colors.white, size: 17),
+                  label: const Text('Call',
+                      style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    minimumSize: const Size(0, 48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
             ],
           ),
-        );
-      },
+          const SizedBox(height: 10),
+          if (_jobInstagram(job).isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _launchInstagram(_jobInstagram(job)),
+                child: Container(
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF2D1B69), Color(0xFF7E22CE)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFF472B6).withOpacity(0.7),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF7E22CE).withOpacity(0.22),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.camera_alt_rounded,
+                          size: 17, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text(
+                        'Instagram',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
