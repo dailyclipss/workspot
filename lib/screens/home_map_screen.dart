@@ -1232,6 +1232,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   Future<void> _centerAndShowJob(Map<String, dynamic> job) async {
     final point = _jobPoint(job);
     if (point == null) return;
+    _showJobDetailsBottomSheet(job, isLoading: true);
     _moveTo(point, 16);
     if (!mounted) return;
     await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -1724,7 +1725,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     _jobDetailOverlayEntry = null;
   }
 
-  void _showJobDetailsBottomSheet(Map<String, dynamic> job) {
+  void _showJobDetailsBottomSheet(Map<String, dynamic> job,
+      {bool isLoading = false}) {
     _dismissJobDetailsOverlay();
 
     final overlay = Overlay.of(context, rootOverlay: true);
@@ -1735,21 +1737,34 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
     _jobDetailOverlayEntry = OverlayEntry(
       builder: (overlayContext) {
+        final maxCardHeight =
+            MediaQuery.of(overlayContext).size.height * 0.75;
         return Material(
           color: Colors.transparent,
           child: SafeArea(
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: Container(color: Colors.transparent),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _dismissJobDetailsOverlay,
+                    child: const SizedBox.expand(),
+                  ),
                 ),
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: _buildJobDetailsCard(
-                      job,
-                      onClose: _dismissJobDetailsOverlay,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: maxCardHeight),
+                      child: isLoading
+                          ? _buildJobLoadingCard()
+                          : SingleChildScrollView(
+                              child: _buildJobDetailsCard(
+                                job,
+                                onClose: _dismissJobDetailsOverlay,
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -1761,6 +1776,31 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
 
     overlay.insert(_jobDetailOverlayEntry!);
+  }
+
+  Widget _buildJobLoadingCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F172A),
+        borderRadius: BorderRadius.all(Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 24,
+            offset: Offset(0, -8),
+          ),
+        ],
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+      ),
+    );
   }
 
   Widget _buildJobDetailsCard(
@@ -2039,19 +2079,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       'Yeni' => appLang.translate('status_new'),
       _ => value,
     };
-    return Flexible(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
       ),
     );
   }
