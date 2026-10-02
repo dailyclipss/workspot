@@ -1722,6 +1722,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      barrierColor: Colors.transparent,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return Container(
@@ -2015,6 +2016,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      barrierColor: Colors.transparent,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return Container(
