@@ -33,7 +33,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Video və səs əlavə etmək üçün mikrofona giriş icazəsi tələb olunur.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>İş məkanını xəritədə seçmək üçün məkan icazəsi tələb olunur.</string>
+	<string>Haritada yakınındaki iş ilanlarını göstermek için konum izni gereklidir.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>İş məkanını xəritədə dəqiq təyin etmək üçün məkan icazəsi tələb olunur.</string>
 	<key>UIApplicationSceneManifest</key>
