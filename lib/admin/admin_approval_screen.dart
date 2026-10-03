@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/notification_service.dart';
+
 class AdminApprovalScreen extends StatefulWidget {
   const AdminApprovalScreen({super.key});
 
@@ -52,7 +54,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
       if (jobIds.isNotEmpty) {
         final jobsResponse = await Supabase.instance.client
             .from('jobs')
-            .select('id, title, company_name')
+            .select('id, title, company_name, business_name, owner_id, created_by, user_id, employer_id, posted_by')
             .inFilter('id', jobIds);
         jobsById = {
           for (final job in List<Map<String, dynamic>>.from(jobsResponse))
@@ -104,6 +106,22 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
         'status': paymentStatus == 'approved' ? 'active' : 'rejected'
       }).eq('id', jobId);
 
+      final job = _jobsById[jobId];
+      final ownerId = _jobOwnerId(job);
+      if (ownerId != null && ownerId.isNotEmpty) {
+        await NotificationService.instance.createNotification(
+          recipientId: ownerId,
+          type: paymentStatus == 'approved' ? 'job_approved' : 'job_rejected',
+          title: paymentStatus == 'approved'
+              ? 'Elanınız Təsdiqləndi! 🎉'
+              : 'Elan Statusu Yeniləndi',
+          message: paymentStatus == 'approved'
+              ? '\'${_jobTitle(job)}\' elanınız nəzərdən keçirildi və xəritədə dərc olundu.'
+              : '\'${_jobTitle(job)}\' elanınız qaydalara uyğun olmadığı üçün təsdiqlənmədi.',
+          jobId: jobId,
+        );
+      }
+
       if (!mounted) return;
       _showMessage(
         paymentStatus == 'approved'
@@ -135,6 +153,22 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
   Map<String, dynamic> _jobFor(Map<String, dynamic> request) {
     final jobId = request['job_id']?.toString() ?? '';
     return _jobsById[jobId] ?? const {};
+  }
+
+  String? _jobOwnerId(Map<String, dynamic>? job) {
+    if (job == null) return null;
+    const candidateKeys = ['owner_id', 'created_by', 'user_id', 'employer_id', 'posted_by'];
+    for (final key in candidateKeys) {
+      final value = job[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  String _jobTitle(Map<String, dynamic>? job) {
+    if (job == null) return 'vakansiya';
+    final value = job['title']?.toString().trim();
+    return value == null || value.isEmpty ? 'vakansiya' : value;
   }
 
   String _text(dynamic value, String fallback) {

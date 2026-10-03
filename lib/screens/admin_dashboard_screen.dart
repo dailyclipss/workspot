@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../admin/admin_approval_screen.dart';
 import '../services/admin_auth_service.dart';
+import '../services/notification_service.dart';
 import '../services/job_location_resolver.dart';
 import 'auth_screen.dart';
 import 'home_map_screen.dart';
@@ -216,6 +217,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return ['true', '1', 'yes', 'y'].contains(value?.toString().toLowerCase().trim());
   }
 
+  String? _jobOwnerId(Map<String, dynamic>? job) {
+    if (job == null) return null;
+    const candidateKeys = ['owner_id', 'created_by', 'user_id', 'employer_id', 'posted_by'];
+    for (final key in candidateKeys) {
+      final value = job[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  String _jobNotificationTitle(String status) {
+    if (status == 'active' || status == 'approved') {
+      return 'Elanınız Təsdiqləndi! 🎉';
+    }
+    return 'Elan Statusu Yeniləndi';
+  }
+
+  String _jobNotificationBody(String status, String title) {
+    if (status == 'active' || status == 'approved') {
+      return '\'$title\' elanınız nəzərdən keçirildi və xəritədə dərc olundu.';
+    }
+    return '\'$title\' elanınız qaydalara uyğun olmadığı üçün təsdiqlənmədi.';
+  }
+
+  Future<void> _notifyJobStatusChange(Map<String, dynamic>? job, String status) async {
+    final ownerId = _jobOwnerId(job);
+    if (ownerId == null || ownerId.isEmpty) return;
+
+    final jobData = job ?? <String, dynamic>{};
+    final title = _jobText(jobData, 'title', _jobBusinessName(jobData));
+    final normalizedStatus = status.toLowerCase().trim();
+    final type = normalizedStatus == 'active' || normalizedStatus == 'approved' ? 'job_approved' : 'job_rejected';
+
+    await NotificationService.instance.createNotification(
+      recipientId: ownerId,
+      type: type,
+      title: _jobNotificationTitle(normalizedStatus),
+      message: _jobNotificationBody(normalizedStatus, title),
+      jobId: job?['id']?.toString(),
+    );
+  }
+
   bool _isPendingJob(Map<String, dynamic> job) {
     final status = _jobAdStatus(job);
     return status == 'pending';
@@ -372,6 +415,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       'ad_status': status,
       'status': status,
     }, baseJob: job);
+    await _notifyJobStatusChange(job, status);
   }
 
   Future<void> _deleteJob(Map<String, dynamic> job) async {
@@ -396,6 +440,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       'ad_status': 'deleted',
       'status': 'deleted',
     }, baseJob: job);
+    await _notifyJobStatusChange(job, 'deleted');
   }
 
   Future<void> _openEditJobSheet(Map<String, dynamic> job) async {
@@ -404,6 +449,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final categoryController = TextEditingController(text: _jobCategory(job));
     final districtController = TextEditingController(text: _jobDistrict(job));
     final addressController = TextEditingController(text: _jobText(job, 'address', ''));
+    final descriptionController = TextEditingController(text: _jobText(job, 'description', ''));
     final phoneController = TextEditingController(text: _jobText(job, 'phone_whatsapp', ''));
     final instagramController = TextEditingController(text: _jobText(job, 'instagram', ''));
     final contactController = TextEditingController(text: _jobText(job, 'contact_person', ''));
@@ -466,6 +512,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(height: 12),
                           _sheetField(addressController, 'Ünvan'),
                           const SizedBox(height: 12),
+                          TextFormField(
+                            controller: descriptionController,
+                            maxLines: 5,
+                            minLines: 3,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: _sheetDecoration('Description / Job Details'),
+                          ),
+                          const SizedBox(height: 12),
                           _sheetField(phoneController, 'Telefon / WhatsApp'),
                           const SizedBox(height: 12),
                           _sheetField(instagramController, 'Instagram'),
@@ -512,6 +568,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         'category': categoryController.text.trim(),
                                         'district': districtController.text.trim(),
                                         'address': addressController.text.trim(),
+                                        'description': descriptionController.text.trim(),
                                         'phone_whatsapp': phoneController.text.trim(),
                                         'instagram': instagramController.text.trim(),
                                         'contact_person': contactController.text.trim(),
@@ -542,6 +599,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     categoryController.dispose();
     districtController.dispose();
     addressController.dispose();
+    descriptionController.dispose();
     phoneController.dispose();
     instagramController.dispose();
     contactController.dispose();
@@ -645,8 +703,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
               TextButton.icon(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminApprovalScreen()));
+                onPressed: () async {
+                  await Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminApprovalScreen()));
+                  if (mounted) {
+                    await _loadDashboardData();
+                  }
                 },
                 icon: const Icon(Icons.receipt_long_rounded),
                 label: const Text('Pending approvals'),
@@ -1017,7 +1078,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminApprovalScreen())),
+                  onPressed: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminApprovalScreen()));
+                    if (mounted) {
+                      await _loadDashboardData();
+                    }
+                  },
                   icon: const Icon(Icons.receipt_long_rounded),
                   label: const Text('Approvals'),
                 ),

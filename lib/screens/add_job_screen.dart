@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/app_language.dart';
 import '../services/job_location_resolver.dart';
+import 'job_payment_screen.dart';
 
 typedef LatLng = gmaps.LatLng;
 
@@ -26,6 +27,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   final TextEditingController _businessNameController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _contactPersonController = TextEditingController();
   final TextEditingController _instagramController = TextEditingController();
@@ -74,6 +76,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   bool _hasVacancy = true;
   bool _isVip = false;
   bool _isSubmitting = false;
+  bool _hasExplicitLocation = false;
   LatLng _selectedLocation = _defaultLocation;
   String _selectedDistrictPreview = 'Nərimanov';
 
@@ -93,6 +96,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
     _businessNameController.dispose();
     _titleController.dispose();
     _addressController.dispose();
+    _descriptionController.dispose();
     _phoneController.dispose();
     _contactPersonController.dispose();
     _instagramController.dispose();
@@ -109,6 +113,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
       _selectedLocation = point;
       _selectedDistrictPreview = _districtFromLocation(point);
       _selectedDistrict ??= _selectedDistrictPreview;
+      _hasExplicitLocation = true;
     });
     _mapController?.animateCamera(gmaps.CameraUpdate.newLatLng(point));
   }
@@ -118,6 +123,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
       _selectedLocation = point;
       _selectedDistrictPreview = _districtFromLocation(point);
       _selectedDistrict = _selectedDistrictPreview;
+      _hasExplicitLocation = true;
     });
   }
 
@@ -190,11 +196,13 @@ class _AddJobScreenState extends State<AddJobScreen> {
         : _businessNameController.text.trim();
     final title = _titleController.text.trim().isEmpty ? 'Yeni Vakansiya' : _titleController.text.trim();
     final districtValue = (_selectedDistrict?.trim().isNotEmpty ?? false) ? _selectedDistrict!.trim() : 'Nərimanov';
+    final latitude = _hasExplicitLocation ? _selectedLocation.latitude : null;
+    final longitude = _hasExplicitLocation ? _selectedLocation.longitude : null;
     final resolvedLocation = JobLocationResolver.resolve(
       district: districtValue,
       address: _addressController.text.trim(),
-      latitude: _selectedLocation.latitude,
-      longitude: _selectedLocation.longitude,
+      latitude: latitude,
+      longitude: longitude,
     );
 
     return <String, dynamic>{
@@ -202,10 +210,13 @@ class _AddJobScreenState extends State<AddJobScreen> {
       'title': title,
       'category': _selectedCategory ?? 'Xidmət',
       'district': districtValue,
+      'description': _descriptionController.text.trim(),
       'latitude': resolvedLocation.latitude,
       'longitude': resolvedLocation.longitude,
-      'has_vacancy': true,
+      'has_vacancy': _hasVacancy,
       'is_vip': _isVip,
+      'owner_id': Supabase.instance.client.auth.currentUser?.id,
+      'created_by': Supabase.instance.client.auth.currentUser?.id,
       'ad_status': 'pending',
       'created_at': DateTime.now().toIso8601String(),
     };
@@ -295,16 +306,22 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
     try {
       final jobData = _buildJobPayload();
-      await _insertJobWithFallback(jobData);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vakansiya əlavə olundu!'),
-          backgroundColor: Colors.green,
+      final didPublish = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => JobPaymentScreen(
+            jobDraft: jobData,
+            preferPremium: _isVip,
+            publishJob: (payload) async {
+              await _insertJobWithFallback(payload);
+            },
+          ),
         ),
       );
-      if (mounted) Navigator.of(context).pop(true);
+
+      if (!mounted) return;
+      if (didPublish == true) {
+        Navigator.of(context).pop(true);
+      }
     } catch (error) {
       final errorMessage = error.toString().trim().isEmpty ? _extractInsertErrorMessage(error) : error.toString();
       debugPrint('Job insert failed: $errorMessage');
@@ -390,6 +407,15 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     maxLines: 2,
                     decoration: _fieldDecoration('Ünvan', 'Tam ünvan / yaxınlıq', Icons.place_rounded),
                     validator: (value) => _requiredValidator(value, 'Ünvanı daxil edin'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _descriptionController,
+                    maxLines: 5,
+                    minLines: 3,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    decoration: _fieldDecoration('Description / Job Details', 'İşin təsviri / Tələblər', Icons.description_outlined),
                   ),
                 ],
               ),
@@ -554,7 +580,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
                         )
                       : const Text(
-                          'Vakansiyanı Yadda Saxla',
+                          'Ödənişə Keç və Dərc Et',
                           style: TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w700),
                         ),
                 ),

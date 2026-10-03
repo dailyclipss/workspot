@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ApplicationsScreen extends StatefulWidget {
-  const ApplicationsScreen({Key? key}) : super(key: key);
+  const ApplicationsScreen({super.key});
 
   @override
   State<ApplicationsScreen> createState() => _ApplicationsScreenState();
@@ -34,19 +34,7 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
       debugPrint('Müraciətlər yüklənmədi: $e');
       if (mounted) {
         setState(() {
-          // Fallback demo datası (Supabase boş olduqda)
-          _myApplications = [
-            {
-              'status': 'Müsahibəyə dəvət et',
-              'created_at': '2026-09-15',
-              'jobs': {'title': 'Senior Barista', 'company_name': 'Coffee Moffie', 'salary_amount': 850}
-            },
-            {
-              'status': 'Baxıldı',
-              'created_at': '2026-09-14',
-              'jobs': {'title': 'Junior Flutter Developer', 'company_name': 'Vertex Media', 'salary_amount': 1200}
-            }
-          ];
+          _myApplications = [];
           _isLoading = false;
         });
       }
@@ -107,7 +95,7 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
                         child: Row(
                           children: [
                             CircleAvatar(
-                              backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
+                              backgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
                               child: const Icon(Icons.business, color: Color(0xFF2563EB)),
                             ),
                             const SizedBox(width: 14),
@@ -124,7 +112,7 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: _getStatusColor(status).withOpacity(0.1),
+                                color: _getStatusColor(status).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(

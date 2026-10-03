@@ -132,8 +132,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   bool _isFilterOpen = false;
   String _selectedCategory = 'all';
   String _selectedJobType = 'all';
-  double _radiusKm = 10.0;
-  RangeValues _salaryRange = const RangeValues(300, 3000);
+  double _radiusKm = 30.0;
+  RangeValues _salaryRange = const RangeValues(0, 100000);
   bool _showOnlyVerified = false;
   final Map<String, BitmapDescriptor> _singleMarkerIcons = {};
   final Map<String, BitmapDescriptor> _clusterBadgeIcons = {};
@@ -142,8 +142,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   Set<Marker> _clusterMarkers = {};
   late final cm.ClusterManager<_JobClusterItem> _clusterManager;
   StreamSubscription<List<Map<String, dynamic>>>? _jobsSubscription;
+  Timer? _jobsRefreshTimer;
   String? _selectedJobId;
   OverlayEntry? _jobDetailOverlayEntry;
+  bool _pendingCameraFitToMarkers = false;
+  bool _pendingClusterSync = false;
 
   final List<String> _categories = const [
     'all',
@@ -156,269 +159,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     'cat_education',
     'cat_medicine',
     'cat_beauty',
-  ];
-
-  final List<Map<String, dynamic>> mockJobs = [
-    {
-      'title': 'Barista / Kofe Mütəxəssisi',
-      'companyName': 'Urban Cafe 28',
-      'category': 'Kafe & Restoran',
-      'salary': '600 - 800 AZN',
-      'jobType': 'Tam iş günü',
-      'address': '28 May küç., 28 Mall yaxınlığı',
-      'latitude': 40.3798,
-      'longitude': 49.8472,
-      'description': 'Aktiv, mehriban və kofe hazırlamağı sevən barista axtarılır.',
-      'imageUrl': 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Kassir',
-      'companyName': 'Baku Book & Stationery',
-      'category': 'Satış & Retail',
-      'salary': '550 - 650 AZN',
-      'jobType': 'Tam iş günü',
-      'address': '28 May m/s çıxışı',
-      'latitude': 40.3805,
-      'longitude': 49.8490,
-      'description': 'Kassa aparatları ilə işləyə bilən diqqətli əməkdaş.',
-      'imageUrl': 'https://images.unsplash.com/photo-1556742049-0a670f4a4591',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Florist / Çiçək Dizayneri',
-      'companyName': 'Rose Boutique',
-      'category': 'Xidmət & Dizayn',
-      'salary': '600 - 900 AZN',
-      'jobType': 'Tam iş günü',
-      'address': 'Rəşid Behbudov küç.',
-      'latitude': 40.3770,
-      'longitude': 49.8420,
-      'description': 'Gül buketlərinin və kompozisiyalarının yığılması.',
-      'imageUrl': 'https://images.unsplash.com/photo-1561181286-d3fee7d55364',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Satıcı-Məsləhətçi',
-      'companyName': 'Trendy Fashion Store',
-      'category': 'Satış & Retail',
-      'salary': '500 - 700 AZN + %',
-      'jobType': 'Növbəli',
-      'address': 'Nizami küç. (Torqovaya)',
-      'latitude': 40.3712,
-      'longitude': 49.8372,
-      'description': 'Geyim mağazasına aktiv satış təmsilçisi tələb olunur.',
-      'imageUrl': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Hostess / Qonaq Qarşılayan',
-      'companyName': 'Anadolu Restaurant',
-      'category': 'Kafe & Restoran',
-      'salary': '600 - 750 AZN',
-      'jobType': 'Növbəli',
-      'address': 'Puşkin küç., Sahil m/s',
-      'latitude': 40.3705,
-      'longitude': 49.8450,
-      'description': 'Restorana gələn qonaqların qarşılanması və masalara yönləndirilməsi.',
-      'imageUrl': 'https://images.unsplash.com/photo-1560066984-138dadb4c035',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Qəlyanaltı / Fast Food Ustası',
-      'companyName': 'Burger House',
-      'category': 'Kafe & Restoran',
-      'salary': '650 - 800 AZN',
-      'jobType': 'Tam iş günü',
-      'address': 'Fəvvarələr Meydanı',
-      'latitude': 40.3725,
-      'longitude': 49.8360,
-      'description': 'Burger və fast-food təamlarının hazırlanması.',
-      'imageUrl': 'https://images.unsplash.com/photo-1550547660-d9450f859349',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Ofisiant (Part-time)',
-      'companyName': 'Coffee Moffie',
-      'category': 'Kafe & Restoran',
-      'salary': '400 - 600 AZN + Çay pulu',
-      'jobType': 'Yarım iş günü',
-      'address': 'Elmlər Akademiyası m/s yaxınlığı',
-      'latitude': 40.3745,
-      'longitude': 49.8135,
-      'description': 'Tələbələr üçün dərslərdən sonra 4-5 saatlıq rahat iş qrafiki.',
-      'imageUrl': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Kopyalama və Print Operatoru',
-      'companyName': 'Copy Center Elmlər',
-      'category': 'Xidmət',
-      'salary': '450 - 550 AZN',
-      'jobType': 'Növbəli',
-      'address': 'Hüseyn Cavid pr.',
-      'latitude': 40.3720,
-      'longitude': 49.8150,
-      'description': 'Tələbə sənədlərinin çapı və kopyalanması xidməti.',
-      'imageUrl': 'https://images.unsplash.com/photo-1562654501-a0ccc0fc3fb1',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Piyada Kuryer',
-      'companyName': 'Express Delivery',
-      'category': 'Çatdırılma',
-      'salary': '600 - 900 AZN',
-      'jobType': 'Sərbəst qrafik',
-      'address': 'Nəriman Nərimanov m/s',
-      'latitude': 40.4028,
-      'longitude': 49.8711,
-      'description': 'Şəhər mərkəzində kiçik bağlamaların çatdırılması.',
-      'imageUrl': 'https://images.unsplash.com/photo-1526367790999-0150786686a2',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'SMM & Kontent Menecer',
-      'companyName': 'Creative Agency Studio',
-      'category': 'Marketing / Media',
-      'salary': '700 - 1000 AZN',
-      'jobType': 'Hibrid',
-      'address': 'Təbriz küç., Nərimanov',
-      'latitude': 40.4050,
-      'longitude': 49.8680,
-      'description': 'Reels/TikTok kontentləri hazırlayacaq kreativ komanda üzvü.',
-      'imageUrl': 'https://images.unsplash.com/photo-1531482615713-2afd69097998',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Məhsul Qablaşdırıcısı',
-      'companyName': 'SuperMarket Network',
-      'category': 'Anbar & Logistika',
-      'salary': '500 - 600 AZN',
-      'jobType': 'Tam iş günü',
-      'address': 'Gənclik m/s, Atatürk pr.',
-      'latitude': 40.4001,
-      'longitude': 49.8523,
-      'description': 'Vitrinlərin düzülməsi və məhsulların qablaşdırılması.',
-      'imageUrl': 'https://images.unsplash.com/photo-1578916171728-46686eac8d58',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Fitness Konsultant',
-      'companyName': 'Ganjlik Gym & Sport',
-      'category': 'İdman & Sağlamlıq',
-      'salary': '600 - 850 AZN',
-      'jobType': 'Növbəli',
-      'address': 'Gənclik Mall yaxınlığı',
-      'latitude': 40.3980,
-      'longitude': 49.8550,
-      'description': 'Zala gelen müştərilərin qarşılanması və abunəlik satışı.',
-      'imageUrl': 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Resepsionist',
-      'companyName': 'City Beauty Studio',
-      'category': 'Xidmət',
-      'salary': '600 - 750 AZN',
-      'jobType': 'Növbəli',
-      'address': 'İçərişəhər m/s yaxınlığı',
-      'latitude': 40.3661,
-      'longitude': 49.8322,
-      'description': 'Gözəllik salonuna qonaqları qarşılayacaq əməkdaş.',
-      'imageUrl': 'https://images.unsplash.com/photo-1560066984-138dadb4c035',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Qrafik Dizayner (Junior)',
-      'companyName': 'Print Art Baku',
-      'category': 'Dizayn',
-      'salary': '500 - 700 AZN',
-      'jobType': 'Tam iş günü',
-      'address': 'Nizami m/s, Cəfər Cabbarlı',
-      'latitude': 40.3790,
-      'longitude': 49.8280,
-      'description': 'Sosial media postlarının və reklam banerlərinin hazırlanması.',
-      'imageUrl': 'https://images.unsplash.com/photo-1626785774573-4b799315345d',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Satış Təmsilçisi',
-      'companyName': 'Auto Care Center',
-      'category': 'Avto & Xidmət',
-      'salary': '700 - 1000 AZN',
-      'jobType': 'Tam iş günü',
-      'address': 'Xətai m/s, Xocalı pr.',
-      'latitude': 40.3830,
-      'longitude': 49.8720,
-      'description': 'Avto aksesuarların və ehtiyat hissələrinin satışı.',
-      'imageUrl': 'https://images.unsplash.com/photo-1580273916550-e323be2ae537',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Ofis Meneceri',
-      'companyName': 'White City Logistics',
-      'category': 'Ofis & İnzibati',
-      'salary': '700 - 900 AZN',
-      'jobType': 'Tam iş günü',
-      'address': 'Ağ Şəhər (White City)',
-      'latitude': 40.3775,
-      'longitude': 49.8890,
-      'description': 'Zənglərin cavablandırılması və ofis daxili sənədləşmə.',
-      'imageUrl': 'https://images.unsplash.com/photo-1497366216548-37526070297c',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Apotek Satıcısı / Əczaçı',
-      'companyName': 'Zəfəran Aptek',
-      'category': 'Səhiyyə & Tibb',
-      'salary': '600 - 800 AZN',
-      'jobType': 'Növbəli',
-      'address': 'İnşaatçılar m/s çıxışı',
-      'latitude': 40.3890,
-      'longitude': 49.8030,
-      'description': 'Dərman vasitələrinin satışı və müştəri konsultasiyası.',
-      'imageUrl': 'https://images.unsplash.com/photo-1586015555751-63c205a30620',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Call Center Operatoru',
-      'companyName': 'Baku Telecom Partner',
-      'category': 'Xidmət & Zəng Mərkəzi',
-      'salary': '500 - 650 AZN',
-      'jobType': 'Növbəli',
-      'address': 'Yasamal, Şərifzadə küç.',
-      'latitude': 40.3840,
-      'longitude': 49.8080,
-      'description': 'Gələn zənglərin qəbulu və sualların cavablandırılması.',
-      'imageUrl': 'https://images.unsplash.com/photo-1534536281715-e28d76689b4d',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Anbar Fəhləsi / Anbardar',
-      'companyName': 'Baku Depot Park',
-      'category': 'Anbar & Logistika',
-      'salary': '550 - 700 AZN',
-      'jobType': 'Tam iş günü',
-      'address': 'Koroğlu m/s yaxınlığı',
-      'latitude': 40.4210,
-      'longitude': 49.9180,
-      'description': 'Anbara gələn malların qəbulu və boşaldılması.',
-      'imageUrl': 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
-    {
-      'title': 'Avtoyuyan / Detailer',
-      'companyName': 'VIP Car Wash',
-      'category': 'Xidmət',
-      'salary': '600 - 1000 AZN (Faizlə)',
-      'jobType': 'Tam iş günü',
-      'address': 'Heydər Əliyev pr.',
-      'latitude': 40.4120,
-      'longitude': 49.9010,
-      'description': 'Nəqliyyat vasitələrinin kimyəvi təmizlənməsi və yuyulması.',
-      'imageUrl': 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f',
-      'createdAt': DateTime.now().toIso8601String(),
-    },
   ];
 
   List<Map<String, dynamic>> _allJobs = [];
@@ -437,6 +177,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     _loadUserLocation();
     _fetchMapJobs();
     _listenToJobs();
+    _jobsRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        _fetchMapJobs();
+      }
+    });
     Future<void>.delayed(const Duration(seconds: 8)).then((_) {
       if (!mounted || _isMapReady || (_mapDebugMessage?.isNotEmpty ?? false)) {
         return;
@@ -459,6 +204,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   void dispose() {
     appLang.removeListener(_onLanguageChanged);
     _jobsSubscription?.cancel();
+    _jobsRefreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -483,36 +229,49 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   Future<void> _fetchMapJobs() async {
+    if (_isJobsLoading) return;
     if (mounted) setState(() => _isJobsLoading = true);
 
     try {
+      debugPrint('MAP FETCH QUERY: from("jobs").select("*") with no strict status/is_approved filters; in-memory filtering happens after fetch.');
       final response = await supabase.Supabase.instance.client
           .from('jobs')
           .select('*');
       debugPrint('TOTAL JOBS FROM SUPABASE: ${response.length}');
 
       final rawJobs = List<Map<String, dynamic>>.from(response);
+      for (final job in rawJobs) {
+        debugPrint(
+          'MAP RAW JOB: title=${job['title'] ?? job['business_name'] ?? job['company_name'] ?? 'unknown'}, '
+          'status=${job['status']}, ad_status=${job['ad_status']}, '
+          'lat=${job['latitude'] ?? job['lat']}, lng=${job['longitude'] ?? job['lng']}',
+        );
+      }
       final jobs = _normalizeJobs(rawJobs);
       final activeJobs = jobs.where(_shouldShowJobOnMap).toList();
+      final filteredJobsPreview = _filteredJobs;
       final jobsMissingCoords = rawJobs.where((job) => _rawJobMissingCoordinates(job)).toList();
-      print('Fetched ${activeJobs.length} total active jobs. Jobs missing lat/lng: ${jobsMissingCoords.map(_jobDebugLabel).join(', ')}');
-      _allJobs = activeJobs.isEmpty ? _buildMockJobs() : activeJobs;
+      debugPrint(
+        'MAP FETCH COUNT: raw=${rawJobs.length}, active=${activeJobs.length}, filtered=${filteredJobsPreview.length}, '
+        'markerSource=${filteredJobsPreview.length}, missingCoords=${jobsMissingCoords.length}',
+      );
+      debugPrint('MAP FETCH JOBS MISSING COORDS: ${jobsMissingCoords.map(_jobDebugLabel).join(', ')}');
+      _allJobs = activeJobs;
       _clearMapDebugMessage();
-      await _rebuildJobMarkers(_allJobs);
+      await _refreshVisibleJobMarkers();
     } catch (error) {
       debugPrint('Error fetching jobs: $error');
       _setMapDebugMessage('Job fetch error: $error');
-      _allJobs = _buildMockJobs();
-      await _rebuildJobMarkers(_allJobs);
+      _allJobs = [];
+      await _refreshVisibleJobMarkers();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Elanlar yüklənmədi, demo məlumat göstərilir: $error')),
+        SnackBar(content: Text('Elanlar yüklənmədi: $error')),
       );
     }
 
     if (!mounted) return;
     setState(() => _isJobsLoading = false);
-    _syncClusterItems();
     debugPrint('LOADED JOBS COUNT: ${_allJobs.length}');
   }
 
@@ -525,31 +284,43 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final normalizedJobs = _normalizeJobs(rows);
       final jobs = normalizedJobs.where(_shouldShowJobOnMap).toList();
       final missingCoords = rows.where((job) => _rawJobMissingCoordinates(Map<String, dynamic>.from(job))).toList();
-      print('Fetched ${jobs.length} total active jobs. Jobs missing lat/lng: ${missingCoords.map((job) => _jobDebugLabel(Map<String, dynamic>.from(job))).join(', ')}');
+      debugPrint(
+        'MAP STREAM COUNT: raw=${rows.length}, active=${jobs.length}, filtered=${_filteredJobs.length}, markerSource=${_filteredJobs.length}, missingCoords=${missingCoords.length}',
+      );
+      debugPrint(
+        'MAP STREAM JOBS MISSING COORDS: ${missingCoords.map((job) => _jobDebugLabel(Map<String, dynamic>.from(job))).join(', ')}',
+      );
       if (!mounted) return;
       _clearMapDebugMessage();
       setState(() {
         _allJobs = jobs;
         _isJobsLoading = false;
       });
-      await _rebuildJobMarkers(jobs);
-      _syncClusterItems();
+      await _refreshVisibleJobMarkers();
     }, onError: (error) {
       debugPrint('Jobs stream error: $error');
       _setMapDebugMessage('Jobs stream error: $error');
     });
   }
 
+  Future<void> _refreshVisibleJobMarkers() async {
+    final filteredJobs = _filteredJobs;
+    debugPrint('MAP REFRESH PIPELINE: filteredJobs=${filteredJobs.length}, markerSource=${filteredJobs.length}');
+    await _rebuildJobMarkers(filteredJobs);
+    _syncClusterItems();
+    await _fitMapToVisibleJobs(filteredJobs);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   Future<void> _rebuildJobMarkers(List<Map<String, dynamic>> jobsList) async {
     final Set<Marker> newMarkers = {};
-    LatLng? latestMarkerPosition;
 
     for (var job in jobsList) {
       final point = _jobPoint(job);
 
       if (point != null) {
-        final position = point;
-        latestMarkerPosition = position;
         final isVip = job['is_vip'] == true;
         final jobId = job['id']?.toString() ?? UniqueKey().toString();
         final salaryLabel = _formatMarkerSalary(job['salary']);
@@ -559,7 +330,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         newMarkers.add(
           Marker(
             markerId: MarkerId(jobId),
-            position: position,
+            position: point,
             infoWindow: InfoWindow.noText,
             icon: icon,
             onTap: () => _showJobBottomSheet(job),
@@ -575,13 +346,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       _jobMarkers = Set<Marker>.from(newMarkers);
       _clusterMarkers = Set<Marker>.from(newMarkers);
     });
-    print('LOG: Total active markers set on map: ${newMarkers.length}');
-
-    if (latestMarkerPosition != null && _isMapReady && _mapController != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(latestMarkerPosition, 14.5),
-      );
-    }
+    debugPrint('MAP MARKERS REBUILT: ${newMarkers.length}');
   }
 
   List<Map<String, dynamic>> _normalizeJobs(List<Map<String, dynamic>> rawJobs) {
@@ -713,12 +478,23 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   double? _safeParseDouble(dynamic value) {
     if (value == null) return null;
     if (value is num) return value.toDouble();
-    return double.tryParse(value.toString());
+    final text = value.toString().trim().replaceAll(',', '.');
+    return double.tryParse(text);
   }
 
   double _jobSalary(Map<String, dynamic> job) {
     final value = job['salary'] ?? job['salary_amount'];
-    return _safeParseDouble(value) ?? 0.0;
+    final directValue = _safeParseDouble(value);
+    if (directValue != null) return directValue;
+
+    final text = value?.toString().trim() ?? '';
+    final match = RegExp(r'(\d+(?:[\.,]\d+)?)').firstMatch(text);
+    if (match != null) {
+      final parsed = double.tryParse(match.group(1)!.replaceAll(',', '.'));
+      if (parsed != null) return parsed;
+    }
+
+    return 0.0;
   }
 
   String _jobSalaryString(Map<String, dynamic> job) {
@@ -819,7 +595,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return salary <= 0 ? 'Razılaşma ilə' : '${salary.round()} ₼';
   }
 
-  List<Map<String, dynamic>> get _jobs => _allJobs;
+  List<Map<String, dynamic>> get _jobs => _filteredJobs;
 
   List<_JobClusterItem> _buildClusterItems() {
     return _jobs.where((job) {
@@ -832,10 +608,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   void _syncClusterItems() {
     final items = _buildClusterItems();
-    _clusterManager.setItems(items);
-    if (_isMapReady) {
-      _clusterManager.updateMap();
+    if (!_isMapReady || _mapController == null) {
+      _pendingClusterSync = true;
+      debugPrint('MAP CLUSTER SYNC DEFERRED: map not ready yet, items=${items.length}');
+      return;
     }
+    _pendingClusterSync = false;
+    _clusterManager.setItems(items);
+    _clusterManager.updateMap();
   }
 
   void _updateClusterMarkers(Set<Marker> markers) {
@@ -844,7 +624,66 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       _clusterMarkers = markers;
       _jobMarkers = {};
     });
-    print('Loaded ${markers.length} markers to map');
+    debugPrint('MAP CLUSTER MARKERS UPDATED: ${markers.length}');
+  }
+
+  Future<void> _fitMapToVisibleJobs([List<Map<String, dynamic>>? jobs]) async {
+    final visibleJobs = jobs ?? _filteredJobs;
+    final points = visibleJobs.map(_jobPoint).whereType<LatLng>().toList();
+    if (points.isEmpty) {
+      debugPrint('MAP CAMERA FIT SKIPPED: no parsed job coordinates');
+      return;
+    }
+
+    final controller = _mapController;
+    if (!_isMapReady || controller == null) {
+      _pendingCameraFitToMarkers = true;
+      debugPrint('MAP CAMERA FIT DEFERRED: map not ready yet, points=${points.length}');
+      return;
+    }
+
+    _pendingCameraFitToMarkers = false;
+    try {
+      if (points.length == 1) {
+        final target = points.first;
+        await controller.animateCamera(
+          CameraUpdate.newLatLngZoom(target, 14.5),
+        );
+        if (!mounted || !_isMapReady || !identical(_mapController, controller)) return;
+        debugPrint('MAP CAMERA FIT: single point lat=${target.latitude}, lng=${target.longitude}');
+        return;
+      }
+
+      double south = points.first.latitude;
+      double north = points.first.latitude;
+      double west = points.first.longitude;
+      double east = points.first.longitude;
+
+      for (final point in points.skip(1)) {
+        south = math.min(south, point.latitude);
+        north = math.max(north, point.latitude);
+        west = math.min(west, point.longitude);
+        east = math.max(east, point.longitude);
+      }
+
+      final bounds = LatLngBounds(
+        southwest: LatLng(south, west),
+        northeast: LatLng(north, east),
+      );
+
+      await controller.animateCamera(
+        CameraUpdate.newLatLngBounds(bounds, 56),
+      );
+      if (!mounted || !_isMapReady || !identical(_mapController, controller)) return;
+      debugPrint('MAP CAMERA FIT: points=${points.length}, bounds=SW($south,$west) NE($north,$east)');
+    } catch (error) {
+      final fallback = points.first;
+      debugPrint('MAP CAMERA FIT FAILED: $error');
+      if (!mounted || !_isMapReady || !identical(_mapController, controller)) return;
+      await controller.animateCamera(
+        CameraUpdate.newLatLngZoom(fallback, 13.8),
+      );
+    }
   }
 
   String _singleMarkerKey(String salaryLabel, IconData icon) {
@@ -1041,8 +880,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (point is LatLng) return point;
     final latitude = (job['latitude'] ?? job['lat']);
     final longitude = (job['longitude'] ?? job['lng']);
-    final lat = double.tryParse(latitude?.toString() ?? '') ?? 0.0;
-    final lng = double.tryParse(longitude?.toString() ?? '') ?? 0.0;
+    final lat = _safeParseDouble(latitude) ?? 0.0;
+    final lng = _safeParseDouble(longitude) ?? 0.0;
     if (lat == 0.0 || lng == 0.0) return null;
     return LatLng(lat, lng);
   }
@@ -1139,92 +978,151 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return const _CategoryMeta(Color(0xFF2979FF), Icons.work_rounded);
   }
 
-  List<Map<String, dynamic>> _buildMockJobs() {
-    return mockJobs.map((job) {
-      final rawCategory = job['category']?.toString() ?? 'Kafe & Restoran';
-      final rawJobType = job['jobType']?.toString() ?? 'Tam iş günü';
-      final rawSalary = job['salary']?.toString() ?? '0';
-      final firstNumberMatch = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(rawSalary);
-      final salaryValue = firstNumberMatch == null
-          ? 0.0
-          : double.tryParse(firstNumberMatch.group(0)!.replaceAll(',', '.')) ?? 0.0;
+  List<Map<String, dynamic>> get _filteredJobs => _buildFilteredJobsWithDiagnostics();
 
-      final category = switch (rawCategory) {
-        'Kafe & Restoran' => 'cat_catering',
-        'Satış & Retail' => 'cat_sales',
-        'Xidmət & Dizayn' || 'Xidmət' || 'Xidmət & Zəng Mərkəzi' => 'cat_customer_service',
-        'Çatdırılma' || 'Anbar & Logistika' => 'cat_logistics',
-        'Marketing / Media' => 'cat_it',
-        'Ofis & İnzibati' => 'cat_customer_service',
-        'Səhiyyə & Tibb' => 'cat_medicine',
-        'İdman & Sağlamlıq' => 'cat_beauty',
-        'Dizayn' || 'Avto & Xidmət' => 'cat_beauty',
-        _ => 'cat_catering',
-      };
-
-      final jobType = switch (rawJobType) {
-        'Tam iş günü' => 'full_time',
-        'Yarım iş günü' => 'part_time',
-        'Növbəli' => 'part_time',
-        'Sərbəst qrafik' => 'part_time',
-        'Hibrid' => 'remote',
-        _ => 'full_time',
-      };
-
-      final latitude = (job['latitude'] is num) ? (job['latitude'] as num).toDouble() : 40.3750;
-      final longitude = (job['longitude'] is num) ? (job['longitude'] as num).toDouble() : 49.8430;
-
-      return {
-        'id': 'demo_${mockJobs.indexOf(job) + 1}',
-        'status': 'active',
-        'business_name': job['companyName'] ?? 'Şirkət',
-        'company_name': job['companyName'] ?? 'Şirkət',
-        'title': job['title'] ?? 'Vakansiya',
-        'district': '',
-        'instagram': '',
-        'phone_whatsapp': '',
-        'contact_person': '',
-        'has_vacancy': true,
-        'salary': rawSalary,
-        'salary_amount': salaryValue,
-        'schedule': jobType == 'full_time' ? 'Tam iş günü' : 'Növbəli',
-        'employment_type': jobType == 'full_time' ? 'Tam iş günü' : 'Növbəli',
-        'salary_text': rawSalary,
-        'category': category,
-        'job_type': jobType,
-        'point': LatLng(latitude, longitude),
-        'address': job['address'] ?? 'Bakı',
-        'response_status': 'responded',
-        'ad_status': 'active',
-        'last_checked_at': DateTime.now().toIso8601String(),
-        'is_verified': true,
-        'posted_time': 'Bugün',
-        'icon': _getCategoryIcon(category),
-        'description': job['description'] ?? 'Detallar göstərilir.',
-      };
-    }).toList();
-  }
-
-  List<Map<String, dynamic>> get _filteredJobs {
+  List<Map<String, dynamic>> _buildFilteredJobsWithDiagnostics() {
     final query = _searchController.text.toLowerCase().trim();
-    return _allJobs.where((job) {
+    var coordinateRejected = 0;
+    var statusRejected = 0;
+    var categoryRejected = 0;
+    var queryRejected = 0;
+    var distanceRejected = 0;
+    var jobTypeRejected = 0;
+    var salaryRejected = 0;
+    var verifiedRejected = 0;
+    final filteredJobs = <Map<String, dynamic>>[];
+
+    for (final job in _allJobs) {
       final point = _jobPoint(job);
-      if (point == null || !_shouldShowJobOnMap(job)) return false;
+      if (point == null) {
+        coordinateRejected++;
+        continue;
+      }
+
+      if (!_shouldShowJobOnMap(job)) {
+        statusRejected++;
+        continue;
+      }
+
       final title = _jobText(job, 'title', 'Vakansiya').toLowerCase();
       final company = _jobText(job, 'company_name', 'Şirkət').toLowerCase();
+      final category = _jobCategory(job).toLowerCase();
+      final district = _jobText(job, 'district', '').toLowerCase();
       final salary = _jobSalary(job);
       final distance = _calculateDistance(_mapCenter, point);
 
-      return (query.isEmpty ||
-              title.contains(query) ||
-              company.contains(query)) &&
-          distance <= _radiusKm &&
-          (_selectedJobType == 'all' ||
-              _jobText(job, 'job_type', 'Tam iş günü') == _selectedJobType) &&
-          salary >= _salaryRange.start &&
-          salary <= _salaryRange.end &&
-          (!_showOnlyVerified || job['is_verified'] == true);
-    }).toList();
+      if (!_categoryMatches(job)) {
+        categoryRejected++;
+        continue;
+      }
+
+      if (!(query.isEmpty ||
+          title.contains(query) ||
+          company.contains(query) ||
+          category.contains(query) ||
+          district.contains(query))) {
+        queryRejected++;
+        continue;
+      }
+
+      if (distance > _radiusKm) {
+        distanceRejected++;
+        continue;
+      }
+
+      if (!(_selectedJobType == 'all' ||
+          _jobText(job, 'job_type', 'Tam iş günü') == _selectedJobType)) {
+        jobTypeRejected++;
+        continue;
+      }
+
+      if (!(salary >= _salaryRange.start && salary <= _salaryRange.end)) {
+        salaryRejected++;
+        continue;
+      }
+
+      if (_showOnlyVerified && job['is_verified'] != true) {
+        verifiedRejected++;
+        continue;
+      }
+
+      filteredJobs.add(job);
+    }
+
+    debugPrint(
+      'MAP FILTER BREAKDOWN: total=${_allJobs.length}, filtered=${filteredJobs.length}, '
+      'statusRejected=$statusRejected, categoryRejected=$categoryRejected, '
+      'queryRejected=$queryRejected, distanceRejected=$distanceRejected, '
+      'jobTypeRejected=$jobTypeRejected, salaryRejected=$salaryRejected, '
+      'verifiedRejected=$verifiedRejected, coordinateRejected=$coordinateRejected, '
+      'radiusKm=$_radiusKm, selectedCategory=$_selectedCategory, selectedJobType=$_selectedJobType, showOnlyVerified=$_showOnlyVerified, searchQuery="${_searchController.text.trim()}"',
+    );
+
+    return filteredJobs;
+  }
+
+  String _jobCategory(Map<String, dynamic> job) {
+    return _jobText(job, 'category', _jobText(job, 'category_name', _jobText(job, 'category_id', _jobText(job, 'categoryId', ''))));
+  }
+
+  bool _categoryMatches(Map<String, dynamic> job) {
+    if (_selectedCategory == 'all') return true;
+
+    final value = _jobCategory(job).toLowerCase();
+    final normalizedValue = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    switch (_selectedCategory) {
+      case 'cat_catering':
+        return normalizedValue.contains('restoran') ||
+            normalizedValue.contains('kafe') ||
+            normalizedValue.contains('catering') ||
+            normalizedValue.contains('restaurant');
+      case 'cat_it':
+        return normalizedValue.contains('it') ||
+            normalizedValue.contains('proqram') ||
+            normalizedValue.contains('software') ||
+            normalizedValue.contains('developer') ||
+            normalizedValue.contains('code');
+      case 'cat_sales':
+        return normalizedValue.contains('satış') ||
+            normalizedValue.contains('sales') ||
+            normalizedValue.contains('marketinq') ||
+            normalizedValue.contains('marketing');
+      case 'cat_logistics':
+        return normalizedValue.contains('logistika') ||
+            normalizedValue.contains('delivery') ||
+            normalizedValue.contains('çatdır') ||
+            normalizedValue.contains('shipping');
+      case 'cat_customer_service':
+        return normalizedValue.contains('müştəri') ||
+            normalizedValue.contains('xidmət') ||
+            normalizedValue.contains('customer') ||
+            normalizedValue.contains('service') ||
+            normalizedValue.contains('support');
+      case 'cat_construction':
+        return normalizedValue.contains('tikinti') ||
+            normalizedValue.contains('construction') ||
+            normalizedValue.contains('təmir') ||
+            normalizedValue.contains('repair');
+      case 'cat_education':
+        return normalizedValue.contains('təhsil') ||
+            normalizedValue.contains('education') ||
+            normalizedValue.contains('school') ||
+            normalizedValue.contains('training');
+      case 'cat_medicine':
+        return normalizedValue.contains('səhiyyə') ||
+            normalizedValue.contains('tibb') ||
+            normalizedValue.contains('medicine') ||
+            normalizedValue.contains('health') ||
+            normalizedValue.contains('medical');
+      case 'cat_beauty':
+        return normalizedValue.contains('gözəllik') ||
+            normalizedValue.contains('beauty') ||
+            normalizedValue.contains('spa') ||
+            normalizedValue.contains('salon');
+      default:
+        return true;
+    }
   }
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
@@ -1305,7 +1203,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         });
                         _mapController = controller;
                         _clearMapDebugMessage();
-                        _syncClusterItems();
+                        if (_pendingCameraFitToMarkers || _filteredJobs.isNotEmpty) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              unawaited(_fitMapToVisibleJobs());
+                            }
+                          });
+                        }
+                        if (_pendingClusterSync || _filteredJobs.isNotEmpty) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              _syncClusterItems();
+                            }
+                          });
+                        }
                       } catch (error) {
                         _setMapDebugMessage('Map initialization error: $error');
                       }
@@ -1321,7 +1232,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                     },
                     onCameraIdle: () {
                       try {
-                        _clusterManager.updateMap();
+                        _syncClusterItems();
                       } catch (error) {
                         _setMapDebugMessage('Map cluster update error: $error');
                       }
@@ -1406,7 +1317,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E293B) : Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 12)],
+          boxShadow: isDark
+              ? [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: Row(
           children: [
@@ -1417,7 +1342,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             Expanded(
               child: TextField(
                 controller: _searchController,
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) async {
+                  setState(() {});
+                  await _refreshVisibleJobMarkers();
+                },
                 decoration: InputDecoration(
                   hintText: appLang.translate('search_hint'),
                   hintStyle: TextStyle(
@@ -1553,7 +1481,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 12)],
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 1),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1587,7 +1529,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             max: 30,
             divisions: 29,
             activeColor: const Color(0xFF2563EB),
-            onChanged: (value) => setState(() => _radiusKm = value),
+            onChanged: (value) async {
+              setState(() => _radiusKm = value);
+              await _refreshVisibleJobMarkers();
+            },
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1601,11 +1546,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           ),
           RangeSlider(
             values: _salaryRange,
-            min: 200,
-            max: 5000,
-            divisions: 48,
+            min: 0,
+            max: 100000,
+            divisions: 100,
             activeColor: const Color(0xFF2563EB),
-            onChanged: (values) => setState(() => _salaryRange = values),
+            onChanged: (values) async {
+              setState(() => _salaryRange = values);
+              await _refreshVisibleJobMarkers();
+            },
           ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -1627,7 +1575,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Yalnız təsdiqlənmiş elanlar'),
             value: _showOnlyVerified,
-            onChanged: (value) => setState(() => _showOnlyVerified = value),
+            onChanged: (value) async {
+              setState(() => _showOnlyVerified = value);
+              await _refreshVisibleJobMarkers();
+            },
           ),
         ],
       ),
@@ -1643,7 +1594,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.grey[100],
       labelStyle:
           TextStyle(color: isSelected ? Colors.white : null, fontSize: 11),
-      onSelected: (_) => setState(() => _selectedJobType = value),
+      onSelected: (_) async {
+        setState(() => _selectedJobType = value);
+        await _refreshVisibleJobMarkers();
+      },
     );
   }
 
@@ -1673,7 +1627,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               selectedColor: const Color(0xFF2563EB),
               onSelected: (_) async {
                 setState(() => _selectedCategory = category);
-                await _fetchMapJobs();
+                await _refreshVisibleJobMarkers();
               },
             ),
           );
@@ -1712,12 +1666,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   void _resetFilters() {
     setState(() {
-      _radiusKm = 10;
+      _radiusKm = 30.0;
       _selectedJobType = 'all';
-      _salaryRange = const RangeValues(300, 3000);
+      _salaryRange = const RangeValues(0, 100000);
       _showOnlyVerified = false;
       _selectedCategory = 'all';
+      _searchController.clear();
     });
+    unawaited(_refreshVisibleJobMarkers());
   }
 
   void _dismissJobDetailsOverlay() {

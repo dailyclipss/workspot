@@ -1,4 +1,4 @@
-import 'package0/flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AdminAddJobScreen extends StatefulWidget {
@@ -10,6 +10,7 @@ class AdminAddJobScreen extends StatefulWidget {
 
 class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _salaryController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
@@ -34,6 +35,7 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
 
       await Supabase.instance.client.from('jobs').insert({
         'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
         'category': _category,
         'employment_type': _employmentType,
         'salary_amount': double.parse(_salaryController.text),
@@ -58,6 +60,16 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
   }
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _salaryController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('WorkSpot Admin — Elan Əlavə Et')),
@@ -66,6 +78,13 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
         child: Column(
           children: [
             TextField(controller: _titleController, decoration: const InputDecoration(labelText: 'Vakansiya Adı')),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descriptionController,
+              maxLines: 4,
+              keyboardType: TextInputType.multiline,
+              decoration: const InputDecoration(labelText: 'Description / Job Details', alignLabelWithHint: true),
+            ),
             const SizedBox(height: 12),
             TextField(controller: _salaryController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Məbləğ (AZN)')),
             const SizedBox(height: 12),

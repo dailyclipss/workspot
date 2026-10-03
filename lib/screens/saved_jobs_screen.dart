@@ -4,45 +4,19 @@ import '../models/job_model.dart';
 class SavedJobsScreen extends StatefulWidget {
   final List<JobModel>? savedJobsList;
 
-  const SavedJobsScreen({Key? key, this.savedJobsList}) : super(key: key);
+  const SavedJobsScreen({super.key, this.savedJobsList});
 
   @override
   State<SavedJobsScreen> createState() => _SavedJobsScreenState();
 }
 
 class _SavedJobsScreenState extends State<SavedJobsScreen> {
-  // Demo və ya ötürülən bəyənilən işlər
   late List<JobModel> _savedJobs;
 
   @override
   void initState() {
     super.initState();
-    _savedJobs = widget.savedJobsList ?? [
-      JobModel(
-        id: '1',
-        title: 'Senior Barista',
-        companyName: 'Coffee Moffie',
-        category: 'İaşə & Restoran',
-        employmentType: 'Tam iş günü',
-        salaryAmount: 850,
-        lat: 40.3712,
-        lng: 49.8360,
-        distanceMeters: 300,
-        isVip: true,
-      ),
-      JobModel(
-        id: '17',
-        title: 'Satıcı-Məsləhətçi',
-        companyName: 'Zara (Port Baku Mall)',
-        category: 'Satış & Ticarət',
-        employmentType: 'Tam iş günü',
-        salaryAmount: 800,
-        lat: 40.3728,
-        lng: 49.8532,
-        distanceMeters: 1400,
-        isVip: true,
-      ),
-    ];
+    _savedJobs = widget.savedJobsList ?? [];
   }
 
   void _removeSavedJob(String id) {
@@ -86,7 +60,7 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
                   elevation: 0,
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: job.isVip ? Colors.amber.shade100 : const Color(0xFF2563EB).withOpacity(0.1),
+                      backgroundColor: job.isVip ? Colors.amber.shade100 : const Color(0xFF2563EB).withValues(alpha: 0.1),
                       child: Icon(
                         job.isVip ? Icons.workspace_premium : Icons.storefront,
                         color: job.isVip ? Colors.amber.shade900 : const Color(0xFF2563EB),
