@@ -15,6 +15,9 @@ jobs:
         with:
           flutter-version: '3.x'
 
+      - name: Disable Swift Package Manager
+        run: flutter config --no-enable-swift-package-manager
+
       - name: Install dependencies
         run: flutter pub get
 
