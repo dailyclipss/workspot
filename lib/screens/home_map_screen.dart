@@ -3,11 +3,15 @@ import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:google_maps_cluster_manager_2/google_maps_cluster_manager_2.dart' as cm;
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:google_maps_cluster_manager_2/google_maps_cluster_manager_2.dart'
+    as cm;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
-import 'package:google_maps_flutter/google_maps_flutter.dart' hide Cluster, ClusterManager;
+import 'package:google_maps_flutter/google_maps_flutter.dart'
+    hide Cluster, ClusterManager;
 import 'package:url_launcher/url_launcher.dart';
 import 'admin_dashboard_screen.dart';
 import '../core/services/application_service.dart';
@@ -66,9 +70,9 @@ IconData _getCategoryIcon(String? category) {
 Widget _buildMarkerWidget(Map<String, dynamic> job) {
   // Safe bool parse for VIP/Verified status
   final isVip = job['is_vip'] == true ||
-                job['is_vip'] == 1 ||
-                job['is_vip'].toString().toLowerCase() == 'true' ||
-                job['is_verified'] == true;
+      job['is_vip'] == 1 ||
+      job['is_vip'].toString().toLowerCase() == 'true' ||
+      job['is_verified'] == true;
 
   final salary = job['salary'] ?? '0';
 
@@ -78,7 +82,9 @@ Widget _buildMarkerWidget(Map<String, dynamic> job) {
       color: const Color(0xFF181A20),
       borderRadius: BorderRadius.circular(14),
       border: Border.all(
-        color: isVip ? const Color(0xFF3B82F6) : const Color(0xFF3B82F6), // FORCED BLUE BORDER
+        color: isVip
+            ? const Color(0xFF3B82F6)
+            : const Color(0xFF3B82F6), // FORCED BLUE BORDER
         width: 1.5,
       ),
     ),
@@ -86,7 +92,8 @@ Widget _buildMarkerWidget(Map<String, dynamic> job) {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Icon(_getCategoryIcon(job['category']), size: 12, color: const Color(0xFF94A3B8)),
+        Icon(_getCategoryIcon(job['category']),
+            size: 12, color: const Color(0xFF94A3B8)),
         const SizedBox(width: 4),
         Text(
           '$salary ₼',
@@ -116,10 +123,14 @@ class HomeMapScreen extends StatefulWidget {
 
 class _HomeMapScreenState extends State<HomeMapScreen> {
   static const LatLng _bakuYouthHubCenter = LatLng(40.3800, 49.8450);
+  static const String _bannerAdUnitId =
+      'ca-app-pub-7785740776753328/4600628474';
 
   final ApplicationService _applicationService = ApplicationService();
   final TextEditingController _searchController = TextEditingController();
 
+  BannerAd? _bannerAd;
+  bool _isBannerAdLoaded = false;
   GoogleMapController? _mapController;
   bool _isMapReady = false;
   LatLng _mapCenter = _bakuYouthHubCenter;
@@ -174,6 +185,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       extraPercent: 0.20,
     );
     appLang.addListener(_onLanguageChanged);
+    if (!kIsWeb) {
+      _loadBannerAd();
+    }
     _loadUserLocation();
     _fetchMapJobs();
     _listenToJobs();
@@ -203,10 +217,34 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   @override
   void dispose() {
     appLang.removeListener(_onLanguageChanged);
+    _bannerAd?.dispose();
     _jobsSubscription?.cancel();
     _jobsRefreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _loadBannerAd() {
+    final bannerAd = BannerAd(
+      adUnitId: _bannerAdUnitId,
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (!mounted) return;
+          setState(() {
+            _bannerAd = ad as BannerAd;
+            _isBannerAdLoaded = true;
+          });
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('Banner ad failed to load: $error');
+          ad.dispose();
+        },
+      ),
+    );
+    _bannerAd = bannerAd;
+    bannerAd.load();
   }
 
   void _onLanguageChanged() {
@@ -233,10 +271,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (mounted) setState(() => _isJobsLoading = true);
 
     try {
-      debugPrint('MAP FETCH QUERY: from("jobs").select("*") with no strict status/is_approved filters; in-memory filtering happens after fetch.');
-      final response = await supabase.Supabase.instance.client
-          .from('jobs')
-          .select('*');
+      debugPrint(
+          'MAP FETCH QUERY: from("jobs").select("*") with no strict status/is_approved filters; in-memory filtering happens after fetch.');
+      final response =
+          await supabase.Supabase.instance.client.from('jobs').select('*');
       debugPrint('TOTAL JOBS FROM SUPABASE: ${response.length}');
 
       final rawJobs = List<Map<String, dynamic>>.from(response);
@@ -250,12 +288,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final jobs = _normalizeJobs(rawJobs);
       final activeJobs = jobs.where(_shouldShowJobOnMap).toList();
       final filteredJobsPreview = _filteredJobs;
-      final jobsMissingCoords = rawJobs.where((job) => _rawJobMissingCoordinates(job)).toList();
+      final jobsMissingCoords =
+          rawJobs.where((job) => _rawJobMissingCoordinates(job)).toList();
       debugPrint(
         'MAP FETCH COUNT: raw=${rawJobs.length}, active=${activeJobs.length}, filtered=${filteredJobsPreview.length}, '
         'markerSource=${filteredJobsPreview.length}, missingCoords=${jobsMissingCoords.length}',
       );
-      debugPrint('MAP FETCH JOBS MISSING COORDS: ${jobsMissingCoords.map(_jobDebugLabel).join(', ')}');
+      debugPrint(
+          'MAP FETCH JOBS MISSING COORDS: ${jobsMissingCoords.map(_jobDebugLabel).join(', ')}');
       _allJobs = activeJobs;
       _clearMapDebugMessage();
       await _refreshVisibleJobMarkers();
@@ -279,11 +319,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     _jobsSubscription?.cancel();
     _jobsSubscription = supabase.Supabase.instance.client
         .from('jobs')
-        .stream(primaryKey: ['id'])
-        .listen((rows) async {
+        .stream(primaryKey: ['id']).listen((rows) async {
       final normalizedJobs = _normalizeJobs(rows);
       final jobs = normalizedJobs.where(_shouldShowJobOnMap).toList();
-      final missingCoords = rows.where((job) => _rawJobMissingCoordinates(Map<String, dynamic>.from(job))).toList();
+      final missingCoords = rows
+          .where((job) =>
+              _rawJobMissingCoordinates(Map<String, dynamic>.from(job)))
+          .toList();
       debugPrint(
         'MAP STREAM COUNT: raw=${rows.length}, active=${jobs.length}, filtered=${_filteredJobs.length}, markerSource=${_filteredJobs.length}, missingCoords=${missingCoords.length}',
       );
@@ -305,7 +347,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   Future<void> _refreshVisibleJobMarkers() async {
     final filteredJobs = _filteredJobs;
-    debugPrint('MAP REFRESH PIPELINE: filteredJobs=${filteredJobs.length}, markerSource=${filteredJobs.length}');
+    debugPrint(
+        'MAP REFRESH PIPELINE: filteredJobs=${filteredJobs.length}, markerSource=${filteredJobs.length}');
     await _rebuildJobMarkers(filteredJobs);
     _syncClusterItems();
     await _fitMapToVisibleJobs(filteredJobs);
@@ -325,7 +368,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         final jobId = job['id']?.toString() ?? UniqueKey().toString();
         final salaryLabel = _formatMarkerSalary(job['salary']);
         final categoryIcon = _markerCategoryIcon(job);
-        final markerKey = '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}';
+        final markerKey =
+            '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}';
         final icon = _jobBadgeIcons[markerKey] ??= await _buildPillMarker(job);
         newMarkers.add(
           Marker(
@@ -337,7 +381,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           ),
         );
       } else {
-        print('MAP MARKER SKIPPED: job=${_jobDebugLabel(job)} lat=${job['latitude']} lng=${job['longitude']} district=${job['district']} address=${job['address']}');
+        print(
+            'MAP MARKER SKIPPED: job=${_jobDebugLabel(job)} lat=${job['latitude']} lng=${job['longitude']} district=${job['district']} address=${job['address']}');
       }
     }
 
@@ -349,39 +394,53 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     debugPrint('MAP MARKERS REBUILT: ${newMarkers.length}');
   }
 
-  List<Map<String, dynamic>> _normalizeJobs(List<Map<String, dynamic>> rawJobs) {
+  List<Map<String, dynamic>> _normalizeJobs(
+      List<Map<String, dynamic>> rawJobs) {
     return rawJobs.map((job) {
       final normalizedJob = Map<String, dynamic>.from(job);
-      normalizedJob['business_name'] ??=
-          normalizedJob['company_name'] ?? normalizedJob['company'] ?? normalizedJob['title'];
+      normalizedJob['business_name'] ??= normalizedJob['company_name'] ??
+          normalizedJob['company'] ??
+          normalizedJob['title'];
       normalizedJob['company_name'] ??= normalizedJob['business_name'];
       normalizedJob['district'] ??= normalizedJob['area'] ?? '';
       normalizedJob['instagram'] ??= normalizedJob['instagram_url'] ?? '';
-      normalizedJob['phone_whatsapp'] ??=
-          normalizedJob['phone'] ?? normalizedJob['whatsapp'] ?? normalizedJob['phone_number'] ?? '';
+      normalizedJob['phone_whatsapp'] ??= normalizedJob['phone'] ??
+          normalizedJob['whatsapp'] ??
+          normalizedJob['phone_number'] ??
+          '';
       normalizedJob['contact_person'] ??= normalizedJob['contact_name'] ?? '';
       normalizedJob['has_vacancy'] ??= normalizedJob['is_vacancy'] ?? true;
       normalizedJob['is_vacancy'] ??= normalizedJob['has_vacancy'] ?? true;
       normalizedJob['salary'] ??= normalizedJob['salary_amount'];
-      normalizedJob['schedule'] ??=
-          normalizedJob['employment_type'] ?? normalizedJob['job_type'] ?? 'Tam iş günü';
+      normalizedJob['schedule'] ??= normalizedJob['employment_type'] ??
+          normalizedJob['job_type'] ??
+          'Tam iş günü';
       normalizedJob['job_type'] ??= normalizedJob['schedule'];
       normalizedJob['response_status'] ??= normalizedJob['response'] ?? '';
       normalizedJob['ad_status'] ??= normalizedJob['status'] ?? '';
       normalizedJob['is_active'] ??= _jobBool(normalizedJob['is_active']) ||
-          ['active', 'approved'].contains(normalizedJob['ad_status']?.toString().toLowerCase().trim()) ||
-          ['active', 'approved'].contains(normalizedJob['status']?.toString().toLowerCase().trim());
+          ['active', 'approved'].contains(
+              normalizedJob['ad_status']?.toString().toLowerCase().trim()) ||
+          [
+            'active',
+            'approved'
+          ].contains(normalizedJob['status']?.toString().toLowerCase().trim());
       normalizedJob['last_checked_at'] ??=
           normalizedJob['updated_at'] ?? normalizedJob['created_at'];
-      final adStatus = normalizedJob['ad_status']?.toString().toLowerCase().trim() ?? '';
+      final adStatus =
+          normalizedJob['ad_status']?.toString().toLowerCase().trim() ?? '';
       final hasVacancy = _jobHasVacancy(normalizedJob);
-      normalizedJob['is_verified'] ??= (adStatus == 'active' || _jobBool(normalizedJob['is_vip'])) && hasVacancy;
+      normalizedJob['is_verified'] ??=
+          (adStatus == 'active' || _jobBool(normalizedJob['is_vip'])) &&
+              hasVacancy;
 
       final resolved = JobLocationResolver.resolve(
         district: normalizedJob['district']?.toString(),
         address: normalizedJob['address']?.toString(),
-        latitude: _safeParseDouble(normalizedJob['latitude'] ?? normalizedJob['lat']),
-        longitude: _safeParseDouble(normalizedJob['longitude'] ?? normalizedJob['lng']),
+        latitude:
+            _safeParseDouble(normalizedJob['latitude'] ?? normalizedJob['lat']),
+        longitude: _safeParseDouble(
+            normalizedJob['longitude'] ?? normalizedJob['lng']),
       );
       normalizedJob['latitude'] ??= resolved.latitude;
       normalizedJob['longitude'] ??= resolved.longitude;
@@ -400,11 +459,16 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   bool _shouldShowJobOnMap(Map<String, dynamic> job) {
-    final adStatus = _jobText(job, 'ad_status', _jobText(job, 'status', '')).toLowerCase().trim();
+    final adStatus = _jobText(job, 'ad_status', _jobText(job, 'status', ''))
+        .toLowerCase()
+        .trim();
     if (adStatus == 'rejected' || adStatus == 'deleted') return false;
     if (!_jobHasVacancy(job)) return false;
     final isActiveFlag = _jobBool(job['is_active']);
-    return adStatus == 'active' || adStatus == 'approved' || isActiveFlag || _jobBool(job['is_vip']);
+    return adStatus == 'active' ||
+        adStatus == 'approved' ||
+        isActiveFlag ||
+        _jobBool(job['is_vip']);
   }
 
   bool _rawJobMissingCoordinates(Map<String, dynamic> job) {
@@ -415,7 +479,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   String _jobDebugLabel(Map<String, dynamic> job) {
     final id = job['id']?.toString() ?? '?';
-    final title = _jobText(job, 'title', _jobText(job, 'business_name', 'unknown'));
+    final title =
+        _jobText(job, 'title', _jobText(job, 'business_name', 'unknown'));
     return '$id:$title';
   }
 
@@ -453,19 +518,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   void _moveTo(LatLng target, double zoom) {
     if (_isMapReady && _mapController != null) {
-  _mapController!.animateCamera(
-    CameraUpdate.newLatLngZoom(target, zoom.toDouble()),
-  );
-}
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(target, zoom.toDouble()),
+      );
+    }
   }
 
   double _calculateDistance(LatLng first, LatLng second) {
     const degreesToRadians = 0.017453292519943295;
     final value = 0.5 -
-      math.cos((second.latitude - first.latitude) * degreesToRadians) / 2 +
-      math.cos(first.latitude * degreesToRadians) *
-        math.cos(second.latitude * degreesToRadians) *
-        (1 - math.cos((second.longitude - first.longitude) * degreesToRadians)) /
+        math.cos((second.latitude - first.latitude) * degreesToRadians) / 2 +
+        math.cos(first.latitude * degreesToRadians) *
+            math.cos(second.latitude * degreesToRadians) *
+            (1 -
+                math.cos(
+                    (second.longitude - first.longitude) * degreesToRadians)) /
             2;
     return 12742 * math.asin(math.sqrt(value));
   }
@@ -508,7 +575,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   String _jobBusinessName(Map<String, dynamic> job) {
-    return _jobText(job, 'business_name', _jobText(job, 'company_name', _jobText(job, 'title', 'Şirkət')));
+    return _jobText(job, 'business_name',
+        _jobText(job, 'company_name', _jobText(job, 'title', 'Şirkət')));
   }
 
   String _jobDistrict(Map<String, dynamic> job) {
@@ -516,11 +584,16 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   String _jobSchedule(Map<String, dynamic> job) {
-    return _jobText(job, 'schedule', _jobText(job, 'job_type', _jobText(job, 'employment_type', 'Tam iş günü')));
+    return _jobText(
+        job,
+        'schedule',
+        _jobText(
+            job, 'job_type', _jobText(job, 'employment_type', 'Tam iş günü')));
   }
 
   String _jobPhoneWhatsapp(Map<String, dynamic> job) {
-    return _jobText(job, 'phone_whatsapp', _jobText(job, 'phone', _jobText(job, 'whatsapp', '')));
+    return _jobText(job, 'phone_whatsapp',
+        _jobText(job, 'phone', _jobText(job, 'whatsapp', '')));
   }
 
   String _jobInstagram(Map<String, dynamic> job) {
@@ -536,11 +609,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   bool _jobBool(dynamic value) {
     if (value is bool) return value;
-    return ['true', '1', 'yes', 'y'].contains(value?.toString().toLowerCase().trim());
+    return ['true', '1', 'yes', 'y']
+        .contains(value?.toString().toLowerCase().trim());
   }
 
   bool _jobIsVerified(Map<String, dynamic> job) {
-    final adStatus = _jobText(job, 'ad_status', _jobText(job, 'status', '')).toLowerCase();
+    final adStatus =
+        _jobText(job, 'ad_status', _jobText(job, 'status', '')).toLowerCase();
     return adStatus == 'active' && _jobHasVacancy(job);
   }
 
@@ -610,7 +685,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final items = _buildClusterItems();
     if (!_isMapReady || _mapController == null) {
       _pendingClusterSync = true;
-      debugPrint('MAP CLUSTER SYNC DEFERRED: map not ready yet, items=${items.length}');
+      debugPrint(
+          'MAP CLUSTER SYNC DEFERRED: map not ready yet, items=${items.length}');
       return;
     }
     _pendingClusterSync = false;
@@ -638,7 +714,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final controller = _mapController;
     if (!_isMapReady || controller == null) {
       _pendingCameraFitToMarkers = true;
-      debugPrint('MAP CAMERA FIT DEFERRED: map not ready yet, points=${points.length}');
+      debugPrint(
+          'MAP CAMERA FIT DEFERRED: map not ready yet, points=${points.length}');
       return;
     }
 
@@ -649,8 +726,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         await controller.animateCamera(
           CameraUpdate.newLatLngZoom(target, 14.5),
         );
-        if (!mounted || !_isMapReady || !identical(_mapController, controller)) return;
-        debugPrint('MAP CAMERA FIT: single point lat=${target.latitude}, lng=${target.longitude}');
+        if (!mounted || !_isMapReady || !identical(_mapController, controller))
+          return;
+        debugPrint(
+            'MAP CAMERA FIT: single point lat=${target.latitude}, lng=${target.longitude}');
         return;
       }
 
@@ -674,12 +753,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       await controller.animateCamera(
         CameraUpdate.newLatLngBounds(bounds, 56),
       );
-      if (!mounted || !_isMapReady || !identical(_mapController, controller)) return;
-      debugPrint('MAP CAMERA FIT: points=${points.length}, bounds=SW($south,$west) NE($north,$east)');
+      if (!mounted || !_isMapReady || !identical(_mapController, controller))
+        return;
+      debugPrint(
+          'MAP CAMERA FIT: points=${points.length}, bounds=SW($south,$west) NE($north,$east)');
     } catch (error) {
       final fallback = points.first;
       debugPrint('MAP CAMERA FIT FAILED: $error');
-      if (!mounted || !_isMapReady || !identical(_mapController, controller)) return;
+      if (!mounted || !_isMapReady || !identical(_mapController, controller))
+        return;
       await controller.animateCamera(
         CameraUpdate.newLatLngZoom(fallback, 13.8),
       );
@@ -724,7 +806,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     overlay.insert(entry);
     try {
       await WidgetsBinding.instance.endOfFrame;
-      final boundary = boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary = boundaryKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
       if (boundary == null) {
         throw StateError('Failed to locate marker boundary');
       }
@@ -732,7 +815,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final ui.Image image = await boundary.toImage(
         pixelRatio: pixelRatio,
       );
-      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
         throw StateError('Failed to encode marker bitmap');
       }
@@ -742,7 +826,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     }
   }
 
-  Future<Marker> _clusterMarkerBuilder(cm.Cluster<_JobClusterItem> cluster) async {
+  Future<Marker> _clusterMarkerBuilder(
+      cm.Cluster<_JobClusterItem> cluster) async {
     if (cluster.isMultiple) {
       final key = _clusterBadgeKey(cluster.count);
       final icon = _clusterBadgeIcons[key] ??=
@@ -766,7 +851,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final isVip = job['is_vip'] == true;
     final salaryLabel = _formatMarkerSalary(job['salary']);
     final categoryIcon = _markerCategoryIcon(job);
-    final icon = _singleMarkerIcons['$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}'] ??= await _buildPillMarker(job);
+    final icon = _singleMarkerIcons[
+            '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}'] ??=
+        await _buildPillMarker(job);
 
     return Marker(
       markerId: MarkerId(jobId),
@@ -843,9 +930,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
 
     final image = await recorder.endRecording().toImage(
-      (width * pixelRatio).ceil(),
-      (height * pixelRatio).ceil(),
-    );
+          (width * pixelRatio).ceil(),
+          (height * pixelRatio).ceil(),
+        );
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     return byteData!.buffer.asUint8List();
   }
@@ -930,7 +1017,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (hasAny(['retail', 'clothes', 'fashion', 'satış', 'shop', 'store'])) {
       return Icons.checkroom;
     }
-    if (hasAny(['office', 'admin', 'ofis', 'inzibati', 'assistant', 'clerical'])) {
+    if (hasAny(
+        ['office', 'admin', 'ofis', 'inzibati', 'assistant', 'clerical'])) {
       return Icons.business_center;
     }
     if (hasAny(['tech', 'it', 'software', 'program', 'proqram', 'developer'])) {
@@ -957,7 +1045,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       return const _CategoryMeta(
           Color(0xFF00E5FF), Icons.medical_services_rounded);
     }
-    if (has('logistika') || has('anbar') || has('çatdırılma') || has('logistics')) {
+    if (has('logistika') ||
+        has('anbar') ||
+        has('çatdırılma') ||
+        has('logistics')) {
       return const _CategoryMeta(
           Color(0xFFD500F9), Icons.local_shipping_rounded);
     }
@@ -965,20 +1056,19 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       return const _CategoryMeta(Color(0xFF2979FF), Icons.headset_mic_rounded);
     }
     if (has('tikinti') || has('construction') || has('inşaat')) {
-      return const _CategoryMeta(
-          Color(0xFFFFAB00), Icons.construction_rounded);
+      return const _CategoryMeta(Color(0xFFFFAB00), Icons.construction_rounded);
     }
     if (has('təhsil') || has('education')) {
       return const _CategoryMeta(Color(0xFFD500F9), Icons.school_rounded);
     }
     if (has('gözəllik') || has('beauty') || has('salon') || has('idman')) {
-      return const _CategoryMeta(
-          Color(0xFFFF5252), Icons.content_cut_rounded);
+      return const _CategoryMeta(Color(0xFFFF5252), Icons.content_cut_rounded);
     }
     return const _CategoryMeta(Color(0xFF2979FF), Icons.work_rounded);
   }
 
-  List<Map<String, dynamic>> get _filteredJobs => _buildFilteredJobsWithDiagnostics();
+  List<Map<String, dynamic>> get _filteredJobs =>
+      _buildFilteredJobsWithDiagnostics();
 
   List<Map<String, dynamic>> _buildFilteredJobsWithDiagnostics() {
     final query = _searchController.text.toLowerCase().trim();
@@ -1062,7 +1152,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   String _jobCategory(Map<String, dynamic> job) {
-    return _jobText(job, 'category', _jobText(job, 'category_name', _jobText(job, 'category_id', _jobText(job, 'categoryId', ''))));
+    return _jobText(
+        job,
+        'category',
+        _jobText(job, 'category_name',
+            _jobText(job, 'category_id', _jobText(job, 'categoryId', ''))));
   }
 
   bool _categoryMatches(Map<String, dynamic> job) {
@@ -1203,7 +1297,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         });
                         _mapController = controller;
                         _clearMapDebugMessage();
-                        if (_pendingCameraFitToMarkers || _filteredJobs.isNotEmpty) {
+                        if (_pendingCameraFitToMarkers ||
+                            _filteredJobs.isNotEmpty) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) {
                               unawaited(_fitMapToVisibleJobs());
@@ -1251,7 +1346,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           mapSurface = Container(
             color: const Color(0xFF0F172A),
             alignment: Alignment.center,
-            child: const Icon(Icons.map_outlined, color: Colors.white54, size: 44),
+            child:
+                const Icon(Icons.map_outlined, color: Colors.white54, size: 44),
           );
         }
 
@@ -1270,7 +1366,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.82),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFEF4444), width: 1.0),
+                        border: Border.all(
+                            color: const Color(0xFFEF4444), width: 1.0),
                       ),
                       child: Text(
                         _mapDebugMessage!,
@@ -1304,6 +1401,18 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ],
           ),
+          bottomNavigationBar:
+              !kIsWeb && _isBannerAdLoaded && _bannerAd != null
+              ? SafeArea(
+                  child: Center(
+                    child: SizedBox(
+                      width: _bannerAd!.size.width.toDouble(),
+                      height: _bannerAd!.size.height.toDouble(),
+                      child: AdWidget(ad: _bannerAd!),
+                    ),
+                  ),
+                )
+              : null,
         );
       },
     );
@@ -1383,7 +1492,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               onPressed: () async {
                 await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen()),
                 );
                 if (mounted) await _fetchMapJobs();
               },
@@ -1396,15 +1506,16 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   if (!context.mounted) return;
                   await Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => const AddJobScreen()),
+                    MaterialPageRoute(builder: (_) => const AddJobScreen()),
                   );
                   if (!mounted || !context.mounted) return;
                   await _fetchMapJobs();
                 } catch (error) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Vakansiya ekranı açıla bilmədi: $error')),
+                    SnackBar(
+                        content:
+                            Text('Vakansiya ekranı açıla bilmədi: $error')),
                   );
                 }
               },
@@ -1461,8 +1572,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   void _openVipBusinessCheckout() {
-    final userId =
-        supabase.Supabase.instance.client.auth.currentUser?.id ?? '';
+    final userId = supabase.Supabase.instance.client.auth.currentUser?.id ?? '';
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1693,8 +1803,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
     _jobDetailOverlayEntry = OverlayEntry(
       builder: (overlayContext) {
-        final maxCardHeight =
-            MediaQuery.of(overlayContext).size.height * 0.75;
+        final maxCardHeight = MediaQuery.of(overlayContext).size.height * 0.75;
         return Material(
           color: Colors.transparent,
           child: SafeArea(
@@ -1841,16 +1950,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         if (_jobIsVerified(job))
                           Container(
                             margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 5),
                             decoration: BoxDecoration(
                               color: const Color(0xFF16A34A).withOpacity(0.18),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.35)),
+                              border: Border.all(
+                                  color: const Color(0xFF22C55E)
+                                      .withOpacity(0.35)),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.verified_rounded, size: 13, color: Color(0xFF22C55E)),
+                                Icon(Icons.verified_rounded,
+                                    size: 13, color: Color(0xFF22C55E)),
                                 SizedBox(width: 4),
                                 Text(
                                   'Aktiv Vakansiya',
@@ -1884,10 +1997,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _jobTag(_jobDistrict(job).isEmpty ? _jobAddress(job) : _jobDistrict(job)),
+              _jobTag(_jobDistrict(job).isEmpty
+                  ? _jobAddress(job)
+                  : _jobDistrict(job)),
               _jobTag(_jobSchedule(job)),
               _jobTag(_jobSalaryString(job)),
-              if (_jobResponseStatus(job).isNotEmpty) _jobTag(_jobResponseStatus(job)),
+              if (_jobResponseStatus(job).isNotEmpty)
+                _jobTag(_jobResponseStatus(job)),
             ],
           ),
           const SizedBox(height: 14),
@@ -1899,8 +2015,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               Expanded(
                 child: Text(
                   _jobLocationSummary(job),
-                  style: const TextStyle(
-                      color: Color(0xFFCBD5E1), fontSize: 13),
+                  style:
+                      const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
                 ),
               ),
             ],
@@ -1957,8 +2073,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   onPressed: () => _launchPhoneAction(_jobPhoneWhatsapp(job)),
                   icon: const Icon(Icons.call_rounded,
                       color: Colors.white, size: 17),
-                  label: const Text('Call',
-                      style: TextStyle(color: Colors.white)),
+                  label:
+                      const Text('Call', style: TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
                     minimumSize: const Size(0, 48),
@@ -2027,9 +2143,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   Widget _jobTag(String value) {
     final label = switch (value) {
-      'full_time' || 'Tam iş günü' || 'Tam İş Qrafiki' =>
+      'full_time' ||
+      'Tam iş günü' ||
+      'Tam İş Qrafiki' =>
         appLang.translate('full_time'),
-      'part_time' || 'Yarım iş günü' || 'Yarım İş Qrafiki' =>
+      'part_time' ||
+      'Yarım iş günü' ||
+      'Yarım İş Qrafiki' =>
         appLang.translate('part_time'),
       'remote' || 'Uzaqdan (Remote)' => appLang.translate('remote_work'),
       'Yeni' => appLang.translate('status_new'),
@@ -2156,8 +2276,8 @@ class _MapActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final backgroundColor = isActive
-      ? const Color(0xFF2563EB).withValues(alpha: 0.96)
-      : const Color(0xFF18181B).withValues(alpha: 0.78);
+        ? const Color(0xFF2563EB).withValues(alpha: 0.96)
+        : const Color(0xFF18181B).withValues(alpha: 0.78);
 
     return SizedBox(
       width: 46,

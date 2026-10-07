@@ -148,17 +148,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
         ),
       };
 
-  String _normalizePhoneForStorage(String value) {
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-    if (digits.isEmpty) return '';
-    if (digits.startsWith('994')) return '+$digits';
-    if (digits.length == 9) return '+994$digits';
-    if (digits.length == 10 && digits.startsWith('0')) {
-      return '+994${digits.substring(1)}';
-    }
-    return value.startsWith('+') ? value : '+$digits';
-  }
-
   String _salaryDisplayValue() {
     if (_salaryByAgreement) return 'Razılaşma ilə';
     final value = _salaryController.text.trim();
@@ -260,7 +249,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
     for (var attempt = 0; attempt < 8; attempt++) {
       try {
         final result = await jobs.insert(workingPayload).select();
-        print('Inserted row: $result');
         return List<Map<String, dynamic>>.from(result);
       } catch (error) {
         lastError = error;
@@ -270,12 +258,10 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
         final missingColumn = _extractMissingColumnKey(error);
         if (missingColumn == null) {
-          debugPrint('jobs insert schema mismatch without column name: $error');
           continue;
         }
 
         if (workingPayload.containsKey(missingColumn)) {
-          debugPrint('jobs insert removing missing column "$missingColumn": $error');
           workingPayload.remove(missingColumn);
           if (missingColumn == 'district') {
             final districtValue = (payload['district']?.toString().trim().isNotEmpty ?? false)
@@ -287,7 +273,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
           continue;
         }
 
-        debugPrint('jobs insert schema mismatch already stripped "$missingColumn": $error');
       }
     }
 
@@ -324,7 +309,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
       }
     } catch (error) {
       final errorMessage = error.toString().trim().isEmpty ? _extractInsertErrorMessage(error) : error.toString();
-      debugPrint('Job insert failed: $errorMessage');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Xəta: $errorMessage')),
