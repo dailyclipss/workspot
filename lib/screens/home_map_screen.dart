@@ -3,7 +3,8 @@ import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -123,8 +124,12 @@ class HomeMapScreen extends StatefulWidget {
 
 class _HomeMapScreenState extends State<HomeMapScreen> {
   static const LatLng _bakuYouthHubCenter = LatLng(40.3800, 49.8450);
-  static const String _bannerAdUnitId =
-      'ca-app-pub-7785740776753328/4600628474';
+  // TEMPORARY: Google test ad units. Restore the production ID
+  // 'ca-app-pub-7785740776753328/4600628474' before release.
+  static String get _bannerAdUnitId =>
+      defaultTargetPlatform == TargetPlatform.android
+          ? 'ca-app-pub-3940256099942544/6300978111'
+          : 'ca-app-pub-3940256099942544/2934735716';
 
   final ApplicationService _applicationService = ApplicationService();
   final TextEditingController _searchController = TextEditingController();
@@ -231,19 +236,37 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       size: AdSize.banner,
       listener: BannerAdListener(
         onAdLoaded: (ad) {
-          if (!mounted) return;
+          // ignore: avoid_print
+          print('AdMob: banner loaded ($_bannerAdUnitId)');
+          if (!mounted) {
+            ad.dispose();
+            return;
+          }
           setState(() {
             _bannerAd = ad as BannerAd;
             _isBannerAdLoaded = true;
           });
         },
         onAdFailedToLoad: (ad, error) {
-          debugPrint('Banner ad failed to load: $error');
+          // ignore: avoid_print
+          print('AdMob Error: ${error.message} '
+              '(code: ${error.code}, domain: ${error.domain})');
           ad.dispose();
+          if (!mounted) return;
+          setState(() {
+            _bannerAd = null;
+            _isBannerAdLoaded = false;
+          });
+        },
+        onAdImpression: (ad) {
+          // ignore: avoid_print
+          print('AdMob: banner impression recorded');
         },
       ),
     );
     _bannerAd = bannerAd;
+    // ignore: avoid_print
+    print('AdMob: loading banner ($_bannerAdUnitId)');
     bannerAd.load();
   }
 
