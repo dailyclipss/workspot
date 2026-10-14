@@ -1,7 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/app_language.dart';
 import '../services/theme_service.dart';
+import '../services/whatsapp_auth_service.dart';
 import 'home_map_screen.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -11,8 +16,224 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
+class _PhoneAuthBottomSheet extends StatefulWidget {
+  final VoidCallback onAuthenticated;
+
+  const _PhoneAuthBottomSheet({required this.onAuthenticated});
+
+  @override
+  State<_PhoneAuthBottomSheet> createState() => _PhoneAuthBottomSheetState();
+}
+
+class _PhoneAuthBottomSheetState extends State<_PhoneAuthBottomSheet> {
+  final _phoneController = TextEditingController();
+  final _otpController = TextEditingController();
+  final _whatsAppAuthService = WhatsAppAuthService();
+  Timer? _resendTimer;
+
+  bool _isOtpSent = false;
+  bool _isLoading = false;
+  int _resendSeconds = 0;
+  String? _phoneNumber;
+
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    _phoneController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    setState(() => _resendSeconds = 60);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _resendSeconds <= 1) {
+        timer.cancel();
+        if (mounted) setState(() => _resendSeconds = 0);
+        return;
+      }
+      setState(() => _resendSeconds -= 1);
+    });
+  }
+
+  Future<void> _sendCode() async {
+    final phoneNumber = WhatsAppAuthService.normalizePhoneNumber(
+      _phoneController.text,
+    );
+    if (!WhatsAppAuthService.isValidAzerbaijanPhoneNumber(phoneNumber)) {
+      _showError(appLang.translate('auth_invalid_phone'));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _whatsAppAuthService.sendOTP(phoneNumber);
+      if (!mounted) return;
+      setState(() {
+        _phoneNumber = phoneNumber;
+        _isOtpSent = true;
+      });
+      _startResendTimer();
+    } catch (error, stackTrace) {
+      debugPrint('Phone OTP send failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      _showError(appLang.translate('auth_send_failed'));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _verifyCode() async {
+    final phoneNumber = _phoneNumber;
+    final code = _otpController.text.trim();
+    if (phoneNumber == null) {
+      _showError(appLang.translate('auth_phone_required'));
+      return;
+    }
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      _showError(appLang.translate('auth_otp_six_digits'));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _whatsAppAuthService.verifyOTP(phoneNumber, code);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      widget.onAuthenticated();
+    } catch (error, stackTrace) {
+      debugPrint('Phone OTP verification failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      _showError(appLang.translate('auth_invalid_or_expired'));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _isOtpSent
+        ? appLang.translate('auth_otp_title')
+        : appLang.translate('auth_phone_login');
+    return AnimatedBuilder(
+      animation: appLang,
+      builder: (context, child) => SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF111827),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _isOtpSent
+                    ? appLang.translateWithArgs(
+                        'auth_otp_sent_info',
+                        {'phone': _phoneNumber ?? ''},
+                      )
+                    : appLang.translate('auth_phone_instruction'),
+                style: const TextStyle(color: Color(0xFF94A3B8)),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _isOtpSent ? _otpController : _phoneController,
+                keyboardType:
+                    _isOtpSent ? TextInputType.number : TextInputType.phone,
+                maxLength: _isOtpSent ? 6 : null,
+                textAlign: _isOtpSent ? TextAlign.center : TextAlign.start,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: _isOtpSent ? 24 : 16,
+                  fontWeight: _isOtpSent ? FontWeight.w700 : FontWeight.normal,
+                  letterSpacing: _isOtpSent ? 8 : 0,
+                ),
+                decoration: InputDecoration(
+                  hintText: _isOtpSent
+                      ? '123456'
+                      : appLang.translate('auth_phone_placeholder'),
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  counterText: '',
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+              if (_isOtpSent) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      _resendSeconds > 0
+                          ? appLang.translateWithArgs(
+                              'auth_resend_timer',
+                              {'seconds': _resendSeconds.toString()},
+                            )
+                          : appLang.translate('auth_code_not_received'),
+                      style: const TextStyle(color: Color(0xFF94A3B8)),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed:
+                          _resendSeconds > 0 || _isLoading ? null : _sendCode,
+                      child: Text(appLang.translate('auth_resend')),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isLoading
+                      ? null
+                      : (_isOtpSent ? _verifyCode : _sendCode),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          _isOtpSent
+                              ? appLang.translate('auth_confirm')
+                              : appLang.translate('auth_send_code'),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
+  static const _oauthRedirectUri = 'com.example.workspot://login-callback/';
   static const String _adminBypassPin = String.fromEnvironment(
     'WORKSPOT_ADMIN_BYPASS_PIN',
     defaultValue: '123456',
@@ -28,10 +249,13 @@ class _AuthScreenState extends State<AuthScreen>
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
   late final Animation<double> _scaleAnimation;
+  late final StreamSubscription<AuthState> _authStateSubscription;
 
   bool _isLoadingGoogle = false;
   bool _isLoadingApple = false;
   bool _isGuestLoading = false;
+  bool _isHandlingWebAuthCallback = false;
+  bool _hasOpenedHomeAfterAuthentication = false;
 
   @override
   void initState() {
@@ -66,11 +290,29 @@ class _AuthScreenState extends State<AuthScreen>
       ),
     );
 
+    _authStateSubscription =
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      debugPrint(
+        'Supabase auth event: ${data.event.name}; '
+        'hasSession: ${data.session != null}',
+      );
+      if (data.event == AuthChangeEvent.signedIn && data.session != null) {
+        _openHomeAfterAuthentication();
+      }
+    });
+
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_handleWebAuthCallback());
+      });
+    }
+
     _animationController.forward();
   }
 
   @override
   void dispose() {
+    _authStateSubscription.cancel();
     _animationController.dispose();
     super.dispose();
   }
@@ -83,9 +325,11 @@ class _AuthScreenState extends State<AuthScreen>
             ? const Color(0xFF111827).withValues(alpha: 0.88)
             : Colors.white.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: isDark ? Colors.white12 : const Color(0x1A0F172A)),
+        border: Border.all(
+            color: isDark ? Colors.white12 : const Color(0x1A0F172A)),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 6)),
+          BoxShadow(
+              color: Colors.black12, blurRadius: 16, offset: Offset(0, 6)),
         ],
       ),
       child: Row(
@@ -190,7 +434,8 @@ class _AuthScreenState extends State<AuthScreen>
                       filled: true,
                       fillColor: const Color(0xFF0F172A),
                       suffixIcon: IconButton(
-                        onPressed: () => setState(() => obscurePin = !obscurePin),
+                        onPressed: () =>
+                            setState(() => obscurePin = !obscurePin),
                         icon: Icon(
                           obscurePin
                               ? Icons.visibility_off_rounded
@@ -212,7 +457,9 @@ class _AuthScreenState extends State<AuthScreen>
                     final pin = pinController.text.trim();
                     if (!RegExp(r'^\d{6}$').hasMatch(pin)) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(appLang.translate('auth_pin_length_error'))),
+                        SnackBar(
+                            content: Text(
+                                appLang.translate('auth_pin_length_error'))),
                       );
                       return;
                     }
@@ -243,14 +490,123 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _handleGoogleAuth() async {
+    if (_isLoadingGoogle) {
+      debugPrint('Google OAuth request ignored because one is already active.');
+      return;
+    }
+
     setState(() => _isLoadingGoogle = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-    setState(() => _isLoadingGoogle = false);
+    try {
+      debugPrint(
+        'Starting Supabase Google OAuth with redirect URI: '
+        '${kIsWeb ? Uri.base.origin : _oauthRedirectUri}',
+      );
+      final launched = await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? Uri.base.origin : _oauthRedirectUri,
+      );
+      debugPrint('Supabase Google OAuth browser launched: $launched');
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google giriş səhifəsi açıla bilmədi.'),
+          ),
+        );
+      }
+    } on AuthException catch (error, stackTrace) {
+      debugPrint('Supabase Google OAuth failed: ${error.message}');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Google ilə giriş alınmadı: ${error.message}')),
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Unexpected Google OAuth error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Google ilə giriş zamanı gözlənilməz xəta baş verdi.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingGoogle = false);
+      }
+    }
+  }
+
+  void _openHomeAfterAuthentication() {
+    if (!mounted || _hasOpenedHomeAfterAuthentication) return;
+    _hasOpenedHomeAfterAuthentication = true;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const HomeMapScreen()),
     );
+  }
+
+  Future<void> _handleWebAuthCallback() async {
+    final callbackUri = Uri.base;
+    final authorizationCode = callbackUri.queryParameters['code'];
+    final providerError = callbackUri.queryParameters['error_description'] ??
+        callbackUri.queryParameters['error'];
+
+    if (providerError != null) {
+      debugPrint('Google OAuth callback error: $providerError');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google ilə giriş alınmadı: $providerError')),
+        );
+      }
+      return;
+    }
+
+    if (authorizationCode == null || authorizationCode.isEmpty) return;
+    if (_isHandlingWebAuthCallback) return;
+    _isHandlingWebAuthCallback = true;
+
+    try {
+      final auth = Supabase.instance.client.auth;
+      if (auth.currentSession != null) {
+        debugPrint('Google OAuth callback session was restored automatically.');
+        _openHomeAfterAuthentication();
+        return;
+      }
+
+      debugPrint('Exchanging Google OAuth callback code for a session.');
+      final response = await auth.exchangeCodeForSession(authorizationCode);
+      debugPrint(
+        'Google OAuth code exchange completed; '
+        'userId: ${response.session.user.id}',
+      );
+      _openHomeAfterAuthentication();
+    } on AuthException catch (error, stackTrace) {
+      debugPrint('Google OAuth callback exchange failed: ${error.message}');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Google ilə giriş alınmadı: ${error.message}')),
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Unexpected Google OAuth callback error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google giriş cavabı emal edilə bilmədi.'),
+          ),
+        );
+      }
+    } finally {
+      _isHandlingWebAuthCallback = false;
+    }
   }
 
   Future<void> _handleAppleAuth() async {
@@ -296,6 +652,48 @@ class _AuthScreenState extends State<AuthScreen>
             child: SafeArea(
               child: Stack(
                 children: [
+                  Positioned(
+                    top: 44,
+                    left: -110,
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 340,
+                        height: 340,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              const Color(0xFF60A5FA).withValues(
+                                alpha: isDark ? 0.22 : 0.18,
+                              ),
+                              const Color(0xFF60A5FA).withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -140,
+                    right: -120,
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 360,
+                        height: 360,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              const Color(0xFF818CF8).withValues(
+                                alpha: isDark ? 0.18 : 0.14,
+                              ),
+                              const Color(0xFF818CF8).withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                   Positioned(
                     top: 8,
                     right: 16,
@@ -348,7 +746,8 @@ class _AuthScreenState extends State<AuthScreen>
                                                   Color(0xFF1D4ED8),
                                                 ],
                                               ),
-                                              borderRadius: BorderRadius.circular(28),
+                                              borderRadius:
+                                                  BorderRadius.circular(28),
                                             ),
                                             child: const Icon(
                                               Icons.location_on_rounded,
@@ -393,251 +792,338 @@ class _AuthScreenState extends State<AuthScreen>
                                     fontSize: 38,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: -0.6,
-                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A),
                                   ),
                                 ),
-                                const SizedBox(height: 28),
-                                SizedBox(
+                                const SizedBox(height: 8),
+                                Text(
+                                  appLang.translate('auth_tagline'),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? const Color(0xFFCBD5E1)
+                                        : const Color(0xFF475569),
+                                    fontSize: 15,
+                                    height: 1.45,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Container(
                                   width: double.infinity,
-                                  height: 54,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {
-                                      showModalBottomSheet(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        backgroundColor: Colors.transparent,
-                                        builder: (sheetContext) {
-                                          return SafeArea(
-                                            top: false,
-                                            child: Container(
-                                              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-                                              decoration: const BoxDecoration(
-                                                color: Color(0xFF111827),
-                                                borderRadius: BorderRadius.vertical(
-                                                  top: Radius.circular(24),
-                                                ),
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF172033)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.08)
+                                          : const Color(0x140F172A),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: isDark ? 0.22 : 0.10,
+                                        ),
+                                        blurRadius: 28,
+                                        offset: const Offset(0, 14),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 56,
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              begin: Alignment.centerLeft,
+                                              end: Alignment.centerRight,
+                                              colors: [
+                                                Color(0xFF3B82F6),
+                                                Color(0xFF1D4ED8),
+                                              ],
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF2563EB)
+                                                    .withValues(alpha: 0.30),
+                                                blurRadius: 16,
+                                                offset: const Offset(0, 8),
                                               ),
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    appLang.translate('auth_phone_login'),
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 18,
-                                                      fontWeight: FontWeight.w800,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 16),
-                                                  TextField(
-                                                    keyboardType: TextInputType.phone,
-                                                    style: const TextStyle(color: Colors.white),
-                                                    decoration: InputDecoration(
-                                                      hintText: appLang.translate('auth_phone_placeholder'),
-                                                      hintStyle: const TextStyle(color: Colors.grey),
-                                                      filled: true,
-                                                      fillColor: const Color(0xFF0F172A),
-                                                      border: const OutlineInputBorder(),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 16),
-                                                  SizedBox(
-                                                    width: double.infinity,
-                                                    child: ElevatedButton(
-                                                      onPressed: () => Navigator.pop(sheetContext),
-                                                      child: Text(appLang.translate('auth_send_code')),
-                                                    ),
-                                                  ),
-                                                ],
+                                            ],
+                                          ),
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              showModalBottomSheet<void>(
+                                                context: context,
+                                                isScrollControlled: true,
+                                                backgroundColor:
+                                                    Colors.transparent,
+                                                builder: (_) =>
+                                                    _PhoneAuthBottomSheet(
+                                                  onAuthenticated:
+                                                      _openHomeAfterAuthentication,
+                                                ),
+                                              );
+                                            },
+                                            icon: const Icon(
+                                              Icons.phone_android_rounded,
+                                              color: Colors.white,
+                                              size: 22,
+                                            ),
+                                            label: Text(
+                                              appLang.translate(
+                                                  'auth_phone_login'),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
                                               ),
                                             ),
-                                          );
-                                        },
-                                      );
-                                    },
-                                    icon: const Icon(
-                                      Icons.phone_android_rounded,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                    label: Text(
-                                      appLang.translate('auth_phone_login'),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF2563EB),
-                                      foregroundColor: Colors.white,
-                                      elevation: 6,
-                                      shadowColor:
-                                          const Color(0xFF2563EB).withValues(alpha: 0.35),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Divider(
-                                        color: isDark ? Colors.grey[800] : Colors.grey[300],
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                                      child: Text(
-                                        appLang.translate('auth_or'),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: isDark ? Colors.grey[500] : Colors.grey[500],
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Divider(
-                                        color: isDark ? Colors.grey[800] : Colors.grey[300],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: OutlinedButton(
-                                        onPressed: _isLoadingGoogle ? null : _handleGoogleAuth,
-                                        style: OutlinedButton.styleFrom(
-                                          minimumSize: const Size(double.infinity, 50),
-                                          side: BorderSide(
-                                            color: isDark
-                                                ? Colors.grey[700]!
-                                                : Colors.grey.shade300,
-                                            width: 1.2,
-                                          ),
-                                          backgroundColor:
-                                              isDark ? const Color(0xFF1E293B) : Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(14),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              foregroundColor: Colors.white,
+                                              elevation: 0,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 20,
+                                                vertical: 16,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                        child: _isLoadingGoogle
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Divider(
+                                              color: isDark
+                                                  ? Colors.grey[800]
+                                                  : Colors.grey[300],
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12.0),
+                                            child: Text(
+                                              appLang.translate('auth_or'),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isDark
+                                                    ? Colors.grey[500]
+                                                    : Colors.grey[500],
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Divider(
+                                              color: isDark
+                                                  ? Colors.grey[800]
+                                                  : Colors.grey[300],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed: _isLoadingGoogle
+                                                  ? null
+                                                  : _handleGoogleAuth,
+                                              style: OutlinedButton.styleFrom(
+                                                minimumSize: const Size(
+                                                    double.infinity, 52),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 12),
+                                                side: BorderSide(
+                                                  color: isDark
+                                                      ? const Color(0xFF475569)
+                                                      : const Color(0xFFCBD5E1),
+                                                  width: 1.2,
+                                                ),
+                                                backgroundColor: isDark
+                                                    ? const Color(0xFF1E293B)
+                                                    : const Color(0xFFF8FAFC),
+                                                overlayColor:
+                                                    const Color(0xFF2563EB)
+                                                        .withValues(
+                                                            alpha: 0.08),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                ),
+                                              ),
+                                              child: _isLoadingGoogle
+                                                  ? const SizedBox(
+                                                      width: 20,
+                                                      height: 20,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color:
+                                                            Color(0xFF2563EB),
+                                                      ),
+                                                    )
+                                                  : Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        Image.network(
+                                                          'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg',
+                                                          height: 18,
+                                                          errorBuilder: (context,
+                                                                  error,
+                                                                  stackTrace) =>
+                                                              const Icon(
+                                                            Icons
+                                                                .g_mobiledata_rounded,
+                                                            size: 28,
+                                                            color: Colors
+                                                                .redAccent,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 8),
+                                                        Text(
+                                                          appLang.translate(
+                                                              'auth_google'),
+                                                          style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 14,
+                                                            color: isDark
+                                                                ? Colors.white
+                                                                : const Color(
+                                                                    0xFF0F172A),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed: _isLoadingApple
+                                                  ? null
+                                                  : _handleAppleAuth,
+                                              style: OutlinedButton.styleFrom(
+                                                minimumSize: const Size(
+                                                    double.infinity, 52),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 12),
+                                                side: BorderSide(
+                                                  color: isDark
+                                                      ? const Color(0xFF475569)
+                                                      : const Color(0xFFCBD5E1),
+                                                  width: 1.2,
+                                                ),
+                                                backgroundColor: isDark
+                                                    ? const Color(0xFF1E293B)
+                                                    : const Color(0xFFF8FAFC),
+                                                overlayColor:
+                                                    const Color(0xFF2563EB)
+                                                        .withValues(
+                                                            alpha: 0.08),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                ),
+                                              ),
+                                              child: _isLoadingApple
+                                                  ? SizedBox(
+                                                      width: 20,
+                                                      height: 20,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: isDark
+                                                            ? Colors.white
+                                                            : Colors.black,
+                                                      ),
+                                                    )
+                                                  : Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.apple,
+                                                          size: 20,
+                                                          color: isDark
+                                                              ? Colors.white
+                                                              : Colors.black,
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 6),
+                                                        Text(
+                                                          appLang.translate(
+                                                              'auth_apple'),
+                                                          style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 14,
+                                                            color: isDark
+                                                                ? Colors.white
+                                                                : const Color(
+                                                                    0xFF0F172A),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 18),
+                                      TextButton.icon(
+                                        onPressed: _isGuestLoading
+                                            ? null
+                                            : _handleGuestAuth,
+                                        icon: _isGuestLoading
                                             ? const SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: Color(0xFF2563EB),
-                                                ),
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        strokeWidth: 2),
                                               )
-                                            : Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Image.network(
-                                                    'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg',
-                                                    height: 18,
-                                                    errorBuilder: (context, error, stackTrace) =>
-                                                        const Icon(
-                                                      Icons.g_mobiledata_rounded,
-                                                      size: 28,
-                                                      color: Colors.redAccent,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    appLang.translate('auth_google'),
-                                                    style: TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 14,
-                                                      color: isDark
-                                                          ? Colors.white
-                                                          : const Color(0xFF0F172A),
-                                                    ),
-                                                  ),
-                                                ],
+                                            : const Icon(
+                                                Icons.arrow_forward_rounded,
+                                                size: 18,
+                                                color: Color(0xFF2563EB),
                                               ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: OutlinedButton(
-                                        onPressed: _isLoadingApple ? null : _handleAppleAuth,
-                                        style: OutlinedButton.styleFrom(
-                                          minimumSize: const Size(double.infinity, 50),
-                                          side: BorderSide(
-                                            color: isDark
-                                                ? Colors.grey[700]!
-                                                : Colors.grey.shade300,
-                                            width: 1.2,
-                                          ),
-                                          backgroundColor:
-                                              isDark ? const Color(0xFF1E293B) : Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(14),
+                                        label: Text(
+                                          appLang
+                                              .translate('auth_guest_continue'),
+                                          style: const TextStyle(
+                                            color: Color(0xFF2563EB),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
                                           ),
                                         ),
-                                        child: _isLoadingApple
-                                            ? SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: isDark ? Colors.white : Colors.black,
-                                                ),
-                                              )
-                                            : Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.apple,
-                                                    size: 20,
-                                                    color: isDark ? Colors.white : Colors.black,
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    appLang.translate('auth_apple'),
-                                                    style: TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 14,
-                                                      color: isDark
-                                                          ? Colors.white
-                                                          : const Color(0xFF0F172A),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 18),
-                                TextButton.icon(
-                                  onPressed: _isGuestLoading ? null : _handleGuestAuth,
-                                  icon: _isGuestLoading
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        )
-                                      : const Icon(
-                                          Icons.explore_outlined,
-                                          size: 18,
-                                          color: Color(0xFF2563EB),
-                                        ),
-                                  label: Text(
-                                    appLang.translate('auth_guest_continue'),
-                                    style: const TextStyle(
-                                      color: Color(0xFF2563EB),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                      decoration: TextDecoration.underline,
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ],

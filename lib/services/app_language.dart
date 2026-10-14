@@ -16,7 +16,8 @@ class AppLanguage extends ChangeNotifier {
     'az': {
       'app_title': 'WorkSpot',
       'tag': '📍 İş Elanları Xəritəsi',
-      'subtitle': 'Xəritə üzərindən sizə ən yaxın iş elanlarını kəşf edin, vakansiyaları yerindəcə görün və bir kliklə müraciət edin.',
+      'subtitle':
+          'Xəritə üzərindən sizə ən yaxın iş elanlarını kəşf edin, vakansiyaları yerindəcə görün və bir kliklə müraciət edin.',
       'phone_login': 'Telefon Nömrəsi ilə Giriş',
       'or_social': 'və ya sosial şəbəkə ilə',
       'guest_login': 'Hesabsız davam et (Xəritəni kəşf et)',
@@ -32,11 +33,28 @@ class AppLanguage extends ChangeNotifier {
       'auth_phone_login': 'Telefon Nömrəsi İlə Giriş',
       'auth_phone_placeholder': '+994 50 000 00 00',
       'auth_send_code': 'Kodu Göndər',
+      'auth_otp_title': 'Təsdiq Kodunu Daxil Edin',
+      'auth_otp_sent_info':
+          '{phone} nömrəsinə göndərilən 6 rəqəmli kodu daxil edin.',
+      'auth_phone_instruction': 'Telefon nömrənizi +994 formatında daxil edin.',
+      'auth_resend_timer': 'Kodu yenidən göndərmək üçün {seconds} san.',
+      'auth_code_not_received': 'Kod gəlmədi?',
+      'auth_resend': 'Yenidən göndər',
+      'auth_confirm': 'Təsdiqlə',
+      'auth_invalid_or_expired':
+          'Daxil edilən kod yanlışdır və ya vaxtı bitib!',
+      'auth_invalid_phone': 'Etibarlı +994 telefon nömrəsi daxil edin.',
+      'auth_phone_required': 'Əvvəlcə telefon nömrənizi daxil edin.',
+      'auth_otp_six_digits': 'Təsdiq kodu 6 rəqəmli olmalıdır.',
+      'auth_send_failed': 'Kod göndərilə bilmədi.',
+      'auth_mock_code': 'Test kodu: 123456',
       'auth_or': 'və ya',
       'auth_google': 'Google',
       'auth_apple': 'Apple',
       'auth_guest_continue': 'Hesabsız davam et',
-      'terms': 'Daxil olmaqla WorkSpot-un İstifadə Şərtlərini və Məxfilik Siyasətini qəbul etdiyinizi təsdiqləyirsiniz.',
+      'auth_tagline': 'Sənə uyğun iş imkanlarını kəşf et',
+      'terms':
+          'Daxil olmaqla WorkSpot-un İstifadə Şərtlərini və Məxfilik Siyasətini qəbul etdiyinizi təsdiqləyirsiniz.',
       'select_language': 'Tətbiq Dilini Seçin',
       'search_hint': 'Vakansiya və ya şirkət axtarın...',
       'all': 'Bütün Vakansiyalar',
@@ -80,13 +98,16 @@ class AppLanguage extends ChangeNotifier {
       'tab_all': 'Hamısı',
       'tab_reviewed': 'Baxılanlar',
       'tab_accepted': 'Qəbul Edilənlər',
-      'no_applications_yet': 'Hələ ki heç bir vakansiyaya müraciət etməmisiniz.',
-      'no_applications_sub': 'Xəritədə sizə yaxın iş elanlarını kəşf edin və CV-nizi bir kliklə göndərin.',
+      'no_applications_yet':
+          'Hələ ki heç bir vakansiyaya müraciət etməmisiniz.',
+      'no_applications_sub':
+          'Xəritədə sizə yaxın iş elanlarını kəşf edin və CV-nizi bir kliklə göndərin.',
       'find_jobs_map': 'Xəritədə İş Axtar',
       'settings_title': 'Tənzimləmələr',
       'notifications_title': 'Vakansiya Bildirişləri',
       'settings_notifications': 'Bildirişlər',
-      'notifications_nearby_subtitle': 'Yaxınlıqda yeni iş çıxdıqda bildiriş al',
+      'notifications_nearby_subtitle':
+          'Yaxınlıqda yeni iş çıxdıqda bildiriş al',
       'dark_mode': 'Qaranlıq Rejim (Dark Mode)',
       'notifications': 'Bildirişlər',
       'all_notifications': 'Bütün bildirişlər',
@@ -99,10 +120,14 @@ class AppLanguage extends ChangeNotifier {
       'notification_interview_title': 'Müsahibə Dəvəti 🎯',
       'notification_new_job_title': 'Ərazinizdə Yeni Vakansiya 📍',
       'notification_system_title': 'Sistem Bildirişi',
-      'notification_application_message': '{company} şirkəti "{job}" vakansiyası üçün göndərdiyiniz müraciətə baxdı.',
-      'notification_interview_message': '{company} şirkəti sizi "{job}" vakansiyası üzrə onlayn müsahibəyə dəvət edir.',
-      'notification_new_job_message': 'Yaxınlığınızda (500m məsafədə) yeni "{job}" elanı yerləşdirildi.',
-      'notification_system_message': 'WorkSpot tətbiqində profil məlumatlarınızı tamamlayaraq daha çox işəgötürənin diqqətini çəkə bilərsiniz.',
+      'notification_application_message':
+          '{company} şirkəti "{job}" vakansiyası üçün göndərdiyiniz müraciətə baxdı.',
+      'notification_interview_message':
+          '{company} şirkəti sizi "{job}" vakansiyası üzrə onlayn müsahibəyə dəvət edir.',
+      'notification_new_job_message':
+          'Yaxınlığınızda (500m məsafədə) yeni "{job}" elanı yerləşdirildi.',
+      'notification_system_message':
+          'WorkSpot tətbiqində profil məlumatlarınızı tamamlayaraq daha çox işəgötürənin diqqətini çəkə bilərsiniz.',
       'time_10_minutes': '10 dəq əvvəl',
       'time_2_hours': '2 saat əvvəl',
       'time_yesterday': 'Dünən',
@@ -163,7 +188,8 @@ class AppLanguage extends ChangeNotifier {
       'select_role_title': 'Tətbiqdən necə istifadə edəcəksiniz?',
       'select_role_subtitle': 'Profil növünü seçərək davam edin',
       'role_candidate_title': 'İş Axtarıram',
-      'role_candidate_desc': 'Xəritədə vakansiyaları kəşf edin və 1 kliklə müraciət edin',
+      'role_candidate_desc':
+          'Xəritədə vakansiyaları kəşf edin və 1 kliklə müraciət edin',
       'role_employer_title': 'İşçi Axtarıram / Şirkət',
       'role_employer_desc': 'Vakansiya yerləşdirin və uyğun namizədləri tapın',
       'business_dashboard': 'Sahibkar Paneli',
@@ -173,7 +199,8 @@ class AppLanguage extends ChangeNotifier {
       'total_views': 'Ümumi Baxış',
       'total_applications': 'Müraciət Sayı',
       'contact_views': 'Əlaqə Baxışları',
-      'upgrade_for_analytics': 'Tam analitika və baxış sayı üçün Pro Business paketinə keçin',
+      'upgrade_for_analytics':
+          'Tam analitika və baxış sayı üçün Pro Business paketinə keçin',
       'switch_to_map': 'Xəritə Görüntüsünə Keç',
       'plan_standard_name': 'Standart (Pulsuz)',
       'plan_standard_f1': '📍 Xəritədə elanları kəşf etmək',
@@ -199,7 +226,8 @@ class AppLanguage extends ChangeNotifier {
     'ru': {
       'app_title': 'WorkSpot',
       'tag': '📍 Карта Вакансий',
-      'subtitle': 'Находите вакансии рядом с вами на карте, просматривайте детали на месте и откликайтесь в один клик.',
+      'subtitle':
+          'Находите вакансии рядом с вами на карте, просматривайте детали на месте и откликайтесь в один клик.',
       'phone_login': 'Вход по номеру телефона',
       'or_social': 'или через соцсети',
       'guest_login': 'Продолжить без аккаунта (Карта)',
@@ -215,11 +243,26 @@ class AppLanguage extends ChangeNotifier {
       'auth_phone_login': 'Вход по номеру телефона',
       'auth_phone_placeholder': '+994 50 000 00 00',
       'auth_send_code': 'Отправить код',
+      'auth_otp_title': 'Введите код подтверждения',
+      'auth_otp_sent_info': 'Введите 6-значный код, отправленный на {phone}.',
+      'auth_phone_instruction': 'Введите номер телефона в формате +994.',
+      'auth_resend_timer': 'Отправить код повторно через {seconds} сек.',
+      'auth_code_not_received': 'Код не получен?',
+      'auth_resend': 'Отправить повторно',
+      'auth_confirm': 'Подтвердить',
+      'auth_invalid_or_expired': 'Неверный или просроченный код!',
+      'auth_invalid_phone': 'Введите действительный номер +994.',
+      'auth_phone_required': 'Сначала введите номер телефона.',
+      'auth_otp_six_digits': 'Код подтверждения должен состоять из 6 цифр.',
+      'auth_send_failed': 'Не удалось отправить код.',
+      'auth_mock_code': 'Тестовый код: 123456',
       'auth_or': 'или',
       'auth_google': 'Google',
       'auth_apple': 'Apple',
       'auth_guest_continue': 'Продолжить без аккаунта',
-      'terms': 'Входя в систему, вы принимаете Условия использования и Политику конфиденциальности WorkSpot.',
+      'auth_tagline': 'Откройте для себя подходящие возможности работы',
+      'terms':
+          'Входя в систему, вы принимаете Условия использования и Политику конфиденциальности WorkSpot.',
       'select_language': 'Выберите язык приложения',
       'search_hint': 'Поиск вакансии или компании...',
       'all': 'Все Вакансии',
@@ -264,28 +307,35 @@ class AppLanguage extends ChangeNotifier {
       'tab_reviewed': 'Просмотренные',
       'tab_accepted': 'Принятые',
       'no_applications_yet': 'Вы еще не подавали заявку ни на одну вакансию.',
-      'no_applications_sub': 'Изучите вакансии рядом с вами на карте и отправьте резюме в один клик.',
+      'no_applications_sub':
+          'Изучите вакансии рядом с вами на карте и отправьте резюме в один клик.',
       'find_jobs_map': 'Искать работу на карте',
       'settings_title': 'Настройки',
       'notifications_title': 'Уведомления о вакансиях',
       'settings_notifications': 'Уведомления',
-      'notifications_nearby_subtitle': 'Получать уведомления о новых вакансиях поблизости',
+      'notifications_nearby_subtitle':
+          'Получать уведомления о новых вакансиях поблизости',
       'dark_mode': 'Тёмный режим (Dark Mode)',
       'notifications': 'Уведомления',
       'all_notifications': 'Все уведомления',
       'unread_notifications': 'Непрочитанные',
       'mark_all_read': 'Отметить все как прочитанные',
       'notifications_empty': 'Уведомлений пока нет',
-      'notifications_empty_subtitle': 'Новые уведомления будут отображаться здесь',
+      'notifications_empty_subtitle':
+          'Новые уведомления будут отображаться здесь',
       'notifications_unread_empty': 'Нет непрочитанных уведомлений',
       'notification_application_title': 'Ваше резюме просмотрено!',
       'notification_interview_title': 'Приглашение на собеседование 🎯',
       'notification_new_job_title': 'Новая вакансия рядом с вами 📍',
       'notification_system_title': 'Системное уведомление',
-      'notification_application_message': 'Компания {company} просмотрела ваш отклик на вакансию "{job}".',
-      'notification_interview_message': 'Компания {company} приглашает вас на онлайн-собеседование по вакансии "{job}".',
-      'notification_new_job_message': 'Рядом с вами (500 м) опубликована новая вакансия "{job}".',
-      'notification_system_message': 'Заполните данные профиля в WorkSpot, чтобы привлечь внимание большего числа работодателей.',
+      'notification_application_message':
+          'Компания {company} просмотрела ваш отклик на вакансию "{job}".',
+      'notification_interview_message':
+          'Компания {company} приглашает вас на онлайн-собеседование по вакансии "{job}".',
+      'notification_new_job_message':
+          'Рядом с вами (500 м) опубликована новая вакансия "{job}".',
+      'notification_system_message':
+          'Заполните данные профиля в WorkSpot, чтобы привлечь внимание большего числа работодателей.',
       'time_10_minutes': '10 мин назад',
       'time_2_hours': '2 часа назад',
       'time_yesterday': 'Вчера',
@@ -335,7 +385,8 @@ class AppLanguage extends ChangeNotifier {
       'download_receipt': 'Скачать чек',
       'request_e_invoice': 'Запросить e-Qaimə',
       'close_label': 'Закрыть',
-      'receipt_download_placeholder': 'Скачивание чека будет доступно в ближайшее время.',
+      'receipt_download_placeholder':
+          'Скачивание чека будет доступно в ближайшее время.',
       'e_invoice_placeholder': 'Запрос e-Qaimə зарегистрирован.',
       'payment_method_local_pos': 'Локальный POS (Карта)',
       'payment_method_apple_iap': 'Apple In-App Purchase',
@@ -346,9 +397,11 @@ class AppLanguage extends ChangeNotifier {
       'select_role_title': 'Как вы планируете использовать приложение?',
       'select_role_subtitle': 'Выберите тип профиля для продолжения',
       'role_candidate_title': 'Ищу работу',
-      'role_candidate_desc': 'Находите вакансии на карте и откликайтесь в 1 клик',
+      'role_candidate_desc':
+          'Находите вакансии на карте и откликайтесь в 1 клик',
       'role_employer_title': 'Ищу сотрудников / Компания',
-      'role_employer_desc': 'Размещайте вакансии и находите подходящих кандидатов',
+      'role_employer_desc':
+          'Размещайте вакансии и находите подходящих кандидатов',
       'business_dashboard': 'Панель работодателя',
       'post_new_job': '+ Опубликовать вакансию',
       'my_active_jobs': 'Мои активные вакансии',
@@ -382,7 +435,8 @@ class AppLanguage extends ChangeNotifier {
     'en': {
       'app_title': 'WorkSpot',
       'tag': '📍 Job Map',
-      'subtitle': 'Discover job vacancies near you on the map, view details on the spot, and apply with one click.',
+      'subtitle':
+          'Discover job vacancies near you on the map, view details on the spot, and apply with one click.',
       'phone_login': 'Sign in with Phone Number',
       'or_social': 'or with social media',
       'guest_login': 'Continue as Guest (Explore Map)',
@@ -398,11 +452,26 @@ class AppLanguage extends ChangeNotifier {
       'auth_phone_login': 'Sign in with Phone Number',
       'auth_phone_placeholder': '+994 50 000 00 00',
       'auth_send_code': 'Send Code',
+      'auth_otp_title': 'Enter Verification Code',
+      'auth_otp_sent_info': 'Enter the 6-digit code sent to {phone}.',
+      'auth_phone_instruction': 'Enter your phone number in +994 format.',
+      'auth_resend_timer': 'Resend code in {seconds} sec.',
+      'auth_code_not_received': 'Did not receive the code?',
+      'auth_resend': 'Resend',
+      'auth_confirm': 'Verify',
+      'auth_invalid_or_expired': 'Invalid or expired code!',
+      'auth_invalid_phone': 'Enter a valid +994 phone number.',
+      'auth_phone_required': 'Enter your phone number first.',
+      'auth_otp_six_digits': 'The verification code must be 6 digits.',
+      'auth_send_failed': 'Could not send the code.',
+      'auth_mock_code': 'Test code: 123456',
       'auth_or': 'or',
       'auth_google': 'Google',
       'auth_apple': 'Apple',
       'auth_guest_continue': 'Continue as Guest',
-      'terms': 'By signing in, you agree to WorkSpot\'s Terms of Service and Privacy Policy.',
+      'auth_tagline': 'Discover job opportunities that fit you',
+      'terms':
+          'By signing in, you agree to WorkSpot\'s Terms of Service and Privacy Policy.',
       'select_language': 'Select App Language',
       'search_hint': 'Search for jobs or companies...',
       'all': 'All Jobs',
@@ -447,12 +516,14 @@ class AppLanguage extends ChangeNotifier {
       'tab_reviewed': 'Reviewed',
       'tab_accepted': 'Accepted',
       'no_applications_yet': 'You haven\'t applied for any jobs yet.',
-      'no_applications_sub': 'Explore jobs near you on the map and send your CV with a single click.',
+      'no_applications_sub':
+          'Explore jobs near you on the map and send your CV with a single click.',
       'find_jobs_map': 'Search Jobs on Map',
       'settings_title': 'Settings',
       'notifications_title': 'Notifications',
       'settings_notifications': 'Notifications',
-      'notifications_nearby_subtitle': 'Receive notifications when new jobs appear nearby',
+      'notifications_nearby_subtitle':
+          'Receive notifications when new jobs appear nearby',
       'dark_mode': 'Dark Mode',
       'notifications': 'Notifications',
       'all_notifications': 'All notifications',
@@ -465,10 +536,14 @@ class AppLanguage extends ChangeNotifier {
       'notification_interview_title': 'Interview Invitation 🎯',
       'notification_new_job_title': 'New Job Near You 📍',
       'notification_system_title': 'System Notification',
-      'notification_application_message': '{company} viewed your application for the "{job}" position.',
-      'notification_interview_message': '{company} is inviting you to an online interview for the "{job}" position.',
-      'notification_new_job_message': 'A new "{job}" job was posted near you (500m away).',
-      'notification_system_message': 'Complete your WorkSpot profile to attract the attention of more employers.',
+      'notification_application_message':
+          '{company} viewed your application for the "{job}" position.',
+      'notification_interview_message':
+          '{company} is inviting you to an online interview for the "{job}" position.',
+      'notification_new_job_message':
+          'A new "{job}" job was posted near you (500m away).',
+      'notification_system_message':
+          'Complete your WorkSpot profile to attract the attention of more employers.',
       'time_10_minutes': '10 mins ago',
       'time_2_hours': '2 hours ago',
       'time_yesterday': 'Yesterday',
@@ -518,7 +593,8 @@ class AppLanguage extends ChangeNotifier {
       'download_receipt': 'Download Receipt',
       'request_e_invoice': 'Request e-Invoice',
       'close_label': 'Close',
-      'receipt_download_placeholder': 'Receipt download will be available soon.',
+      'receipt_download_placeholder':
+          'Receipt download will be available soon.',
       'e_invoice_placeholder': 'e-Invoice request has been recorded.',
       'payment_method_local_pos': 'Local POS (Card)',
       'payment_method_apple_iap': 'Apple In-App Purchase',
@@ -529,7 +605,8 @@ class AppLanguage extends ChangeNotifier {
       'select_role_title': 'How do you plan to use the app?',
       'select_role_subtitle': 'Choose your profile type to continue',
       'role_candidate_title': 'Looking for a Job',
-      'role_candidate_desc': 'Discover vacancies on the map and apply in 1 click',
+      'role_candidate_desc':
+          'Discover vacancies on the map and apply in 1 click',
       'role_employer_title': 'Hiring / Business',
       'role_employer_desc': 'Post vacancies and find suitable candidates',
       'business_dashboard': 'Employer Dashboard',
@@ -566,6 +643,14 @@ class AppLanguage extends ChangeNotifier {
 
   String translate(String key) {
     return _localizedValues[_currentLanguage]?[key] ?? key;
+  }
+
+  String translateWithArgs(String key, Map<String, String> arguments) {
+    var value = translate(key);
+    for (final entry in arguments.entries) {
+      value = value.replaceAll('{${entry.key}}', entry.value);
+    }
+    return value;
   }
 }
 

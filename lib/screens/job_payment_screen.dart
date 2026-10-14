@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/payment_service.dart';
+
 class JobPaymentScreen extends StatefulWidget {
   final Map<String, dynamic> jobDraft;
   final bool preferPremium;
@@ -151,7 +153,8 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
       'description': payload['description']?.toString() ?? '',
       'success_url':
           payload['success_url']?.toString() ?? 'https://$_baseDomain/success',
-      'fail_url': payload['fail_url']?.toString() ?? 'https://$_baseDomain/fail',
+      'fail_url':
+          payload['fail_url']?.toString() ?? 'https://$_baseDomain/fail',
     });
     return uri.toString();
   }
@@ -386,20 +389,31 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
 
   Future<void> _publishMockSuccess() async {
     if (_isPublishing) return;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (!PaymentService.isValidUuid(currentUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Elanı yayımlamaq üçün hesabınıza daxil olun.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isPublishing = true);
 
     try {
       final mockOrderId = 'mock_${DateTime.now().millisecondsSinceEpoch}';
       final jobData = Map<String, dynamic>.from(widget.jobDraft);
-      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
       jobData['ad_status'] = 'active';
       jobData['status'] = 'active';
       jobData['is_active'] = true;
       jobData['has_vacancy'] = true;
       jobData['is_vip'] = _selectedPackage.isPremium;
-      jobData['package_type'] = _selectedPackage.isPremium ? 'Premium' : 'Standard';
-      jobData['owner_id'] = currentUserId ?? jobData['owner_id'];
-      jobData['created_by'] = currentUserId ?? jobData['created_by'];
+      jobData['package_type'] =
+          _selectedPackage.isPremium ? 'Premium' : 'Standard';
+      jobData['owner_id'] = currentUserId;
+      jobData['created_by'] = currentUserId;
       jobData['listing_package'] = _selectedPackage.id;
       jobData['listing_amount'] = _selectedPackage.amount;
       jobData['listing_currency'] = 'AZN';
@@ -416,7 +430,8 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
             backgroundColor: _surface,
             title: const Text(
               'Payment successful',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
             ),
             content: const Text(
               'Test payment was simulated successfully and the job was published.',
@@ -452,19 +467,30 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
 
   Future<void> _publishAfterPayment(Uri uri) async {
     if (_isPublishing) return;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (!PaymentService.isValidUuid(currentUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Elanı yayımlamaq üçün hesabınıza daxil olun.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isPublishing = true);
 
     try {
       final jobData = Map<String, dynamic>.from(widget.jobDraft);
-        final currentUserId = Supabase.instance.client.auth.currentUser?.id;
       jobData['ad_status'] = 'active';
       jobData['status'] = 'active';
       jobData['is_active'] = true;
       jobData['has_vacancy'] = true;
       jobData['is_vip'] = _selectedPackage.isPremium;
-      jobData['package_type'] = _selectedPackage.isPremium ? 'Premium' : 'Standard';
-        jobData['owner_id'] = currentUserId ?? jobData['owner_id'];
-        jobData['created_by'] = currentUserId ?? jobData['created_by'];
+      jobData['package_type'] =
+          _selectedPackage.isPremium ? 'Premium' : 'Standard';
+      jobData['owner_id'] = currentUserId;
+      jobData['created_by'] = currentUserId;
       jobData['listing_package'] = _selectedPackage.id;
       jobData['listing_amount'] = _selectedPackage.amount;
       jobData['listing_currency'] = 'AZN';
@@ -570,8 +596,8 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
                   )
                 : const Text(
                     'Reload checkout',
-                    style:
-                        TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700),
                   ),
           ),
         ),

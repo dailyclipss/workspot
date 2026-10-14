@@ -25,6 +25,7 @@ import 'notifications_screen.dart';
 import 'payment_checkout_screen.dart';
 import 'profile_screen.dart';
 import '../services/payment_service.dart';
+import '../utils/contact_utils.dart';
 
 class _CategoryMeta {
   final Color color;
@@ -382,7 +383,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final point = _jobPoint(job);
 
       if (point != null) {
-        final isVip = job['is_vip'] == true;
+        final isVip = _jobIsVipActive(job);
         final jobId = job['id']?.toString() ?? UniqueKey().toString();
         final salaryLabel = _formatMarkerSalary(job['salary']);
         final categoryIcon = _markerCategoryIcon(job);
@@ -637,6 +638,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return adStatus == 'active' && _jobHasVacancy(job);
   }
 
+  bool _jobIsVipActive(Map<String, dynamic> job) {
+    final bool isVip = job['is_vip'] == true ||
+        job['is_vip'] == 1 ||
+        job['is_vip'].toString() == 'true';
+    if (!isVip) return false;
+
+    final rawExpiry = job['vip_until'] ?? job['vip_expires_at'];
+    if (rawExpiry == null || rawExpiry.toString().trim().isEmpty) {
+      return true;
+    }
+    final expiry = DateTime.tryParse(rawExpiry.toString());
+    return expiry == null || expiry.isAfter(DateTime.now());
+  }
+
   String _jobResponseStatus(Map<String, dynamic> job) {
     return _jobText(job, 'response_status', '');
   }
@@ -656,20 +671,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   String _jobContactPerson(Map<String, dynamic> job) {
     return _jobText(job, 'contact_person', '');
-  }
-
-  Future<void> _launchPhoneAction(
-    String phone, {
-    bool useWhatsApp = false,
-  }) async {
-    final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    if (digits.isEmpty) return;
-    final uri = useWhatsApp
-        ? Uri.parse('https://wa.me/${digits.replaceAll('+', '')}')
-        : Uri.parse('tel:$digits');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   Future<void> _launchInstagram(String instagram) async {
@@ -866,7 +867,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final item = cluster.items.first;
     final job = item.job;
     final jobId = job['id']?.toString() ?? cluster.getId();
-    final isVip = job['is_vip'] == true;
+    final isVip = _jobIsVipActive(job);
     final salaryLabel = _formatMarkerSalary(job['salary']);
     final categoryIcon = _markerCategoryIcon(job);
     final icon = _singleMarkerIcons[
@@ -1419,8 +1420,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ],
           ),
-          bottomNavigationBar:
-              !kIsWeb && _isBannerAdLoaded && _bannerAd != null
+          bottomNavigationBar: !kIsWeb && _isBannerAdLoaded && _bannerAd != null
               ? SafeArea(
                   child: Center(
                     child: SizedBox(
@@ -1890,17 +1890,28 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     Map<String, dynamic> job, {
     required VoidCallback onClose,
   }) {
+    final isVip = _jobIsVipActive(job);
+    print('Job ${job['id']} is_vip value: ${job['is_vip']}');
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Color(0xFF0F172A),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        border:
+            isVip ? Border.all(color: const Color(0xFFFFC73C), width: 2) : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black54,
             blurRadius: 24,
             offset: Offset(0, -8),
           ),
+          if (isVip)
+            BoxShadow(
+              color: const Color(0xFFFFC73C).withValues(alpha: 0.34),
+              blurRadius: 18,
+              spreadRadius: 1,
+            ),
         ],
       ),
       child: Column(
@@ -1958,13 +1969,35 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                             _jobBusinessName(job),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: isVip
+                                  ? const Color(0xFFFFD466)
+                                  : Colors.white,
                             ),
                           ),
                         ),
+                        if (isVip)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFC73C),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'VIP',
+                              style: TextStyle(
+                                color: Color(0xFF111625),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
                         if (_jobIsVerified(job))
                           Container(
                             margin: const EdgeInsets.only(left: 8),
@@ -2069,10 +2102,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _launchPhoneAction(
-                    _jobPhoneWhatsapp(job),
-                    useWhatsApp: true,
-                  ),
+                  onPressed: () => openWhatsApp(_jobPhoneWhatsapp(job)),
                   icon: const Icon(Icons.chat_bubble_rounded,
                       color: Colors.white, size: 17),
                   label: const Text('WhatsApp',
@@ -2088,7 +2118,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _launchPhoneAction(_jobPhoneWhatsapp(job)),
+                  onPressed: () => makePhoneCall(_jobPhoneWhatsapp(job)),
                   icon: const Icon(Icons.call_rounded,
                       color: Colors.white, size: 17),
                   label:

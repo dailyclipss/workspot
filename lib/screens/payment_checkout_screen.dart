@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/app_language.dart';
 import '../services/payment_service.dart';
@@ -9,11 +10,13 @@ import '../services/payment_service.dart';
 class PaymentCheckoutScreen extends StatefulWidget {
   final String targetId;
   final PaymentTargetType targetType;
+  final Future<void> Function()? onPaymentSuccess;
 
   const PaymentCheckoutScreen({
     super.key,
     required this.targetId,
     this.targetType = PaymentTargetType.job,
+    this.onPaymentSuccess,
   });
 
   @override
@@ -97,18 +100,42 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
     final package = _selectedPackage;
     if (package == null) return;
 
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (!PaymentService.isValidUuid(userId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Paket almaq üçün əvvəlcə hesabınıza daxil olun.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final targetId = widget.targetId.trim();
+    if (!PaymentService.isValidUuid(targetId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ödəniş üçün etibarlı elan və ya hesab məlumatı tapılmadı.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     final result = _isProPackage
         ? await PaymentService.instance.payWithInAppPurchase(
             package: package,
-            targetId: widget.targetId,
+            targetId: targetId,
             targetType: widget.targetType,
             isIOS: _isIOS,
           )
         : await PaymentService.instance.payWithLocalPos(
             package: package,
-            targetId: widget.targetId,
+            targetId: targetId,
             targetType: widget.targetType,
           );
 
@@ -116,6 +143,8 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
     setState(() => _isProcessing = false);
 
     if (result.success) {
+      await widget.onPaymentSuccess?.call();
+      if (!mounted) return;
       _showReceiptModal(result);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -242,8 +271,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
     return switch (method) {
       PaymentMethod.localPos => appLang.translate('payment_method_local_pos'),
       PaymentMethod.appleIap => appLang.translate('payment_method_apple_iap'),
-      PaymentMethod.googleIap =>
-        appLang.translate('payment_method_google_iap'),
+      PaymentMethod.googleIap => appLang.translate('payment_method_google_iap'),
     };
   }
 
@@ -405,8 +433,8 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
     final isSelected = _selectedPackage?.id == tier.package.id;
     final borderColor = isSelected ? tier.accent : Colors.white12;
     final glowColor = tier.featured
-      ? tier.accent.withValues(alpha: 0.25)
-      : tier.accent.withValues(alpha: 0.14);
+        ? tier.accent.withValues(alpha: 0.25)
+        : tier.accent.withValues(alpha: 0.14);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 240),
@@ -476,12 +504,13 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
                                         borderRadius:
                                             BorderRadius.circular(999),
                                         border: Border.all(
-                                          color: tier.accent.withValues(alpha: 0.82),
+                                          color: tier.accent
+                                              .withValues(alpha: 0.82),
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: tier.accent.withValues(
-                                                alpha: 0.28),
+                                            color: tier.accent
+                                                .withValues(alpha: 0.28),
                                             blurRadius: 14,
                                             spreadRadius: 0.5,
                                           ),
@@ -733,7 +762,8 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
           runSpacing: 10,
           children: [
             _HeaderChip(icon: Icons.map_rounded, label: 'Xəritə VIP'),
-            _HeaderChip(icon: Icons.analytics_rounded, label: 'Müraciət analitikası'),
+            _HeaderChip(
+                icon: Icons.analytics_rounded, label: 'Müraciət analitikası'),
             _HeaderChip(icon: Icons.support_agent_rounded, label: 'B2B dəstək'),
           ],
         ),
@@ -854,7 +884,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-                const Text(
+              const Text(
                 'Pro Abunəlik',
                 style: TextStyle(
                   color: Colors.white,

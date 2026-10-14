@@ -85,8 +85,14 @@ class PaymentResult {
 class PaymentService {
   PaymentService._();
   static final PaymentService instance = PaymentService._();
+  static final RegExp _uuidPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+  );
 
   SupabaseClient get _client => Supabase.instance.client;
+
+  static bool isValidUuid(String? value) =>
+      value != null && _uuidPattern.hasMatch(value.trim());
 
   Future<PaymentResult> payWithLocalPos({
     required PaymentPackage package,
@@ -113,7 +119,8 @@ class PaymentService {
       method: isIOS ? PaymentMethod.appleIap : PaymentMethod.googleIap,
       targetId: targetId,
       targetType: targetType,
-      charge: () => isIOS ? _chargeAppleIap(package) : _chargeGoogleIap(package),
+      charge: () =>
+          isIOS ? _chargeAppleIap(package) : _chargeGoogleIap(package),
     );
   }
 
@@ -125,12 +132,26 @@ class PaymentService {
     required Future<String> Function() charge,
   }) async {
     try {
+      final userId = _client.auth.currentUser?.id;
+      if (!isValidUuid(userId)) {
+        throw StateError(
+            'An authenticated user is required to make a payment.');
+      }
+      if (!isValidUuid(targetId)) {
+        throw ArgumentError.value(
+          targetId,
+          'targetId',
+          'A valid job, company, or subscription UUID is required.',
+        );
+      }
+
       final transactionId = await charge();
       final vipExpiresAt =
           DateTime.now().add(Duration(days: package.vipDurationDays));
 
       await _recordSuccessfulPayment(
         transactionId: transactionId,
+        userId: userId!,
         package: package,
         method: method,
         targetId: targetId,
@@ -176,6 +197,7 @@ class PaymentService {
 
   Future<void> _recordSuccessfulPayment({
     required String transactionId,
+    required String userId,
     required PaymentPackage package,
     required PaymentMethod method,
     required String targetId,
@@ -184,8 +206,13 @@ class PaymentService {
   }) async {
     await _client.from('transactions').insert({
       'reference': transactionId,
+      'user_id': userId,
+      'job_id': targetType == PaymentTargetType.job ? targetId : null,
       'target_id': targetId,
       'target_type': targetType.name,
+      'package_type': targetType == PaymentTargetType.job
+          ? 'vip_${package.vipDurationDays}_days'
+          : package.id,
       'package_id': package.id,
       'package_name': appLang.translate(package.nameKey),
       'amount': package.amount,
@@ -195,10 +222,19 @@ class PaymentService {
       'created_at': DateTime.now().toIso8601String(),
     });
 
-    final table = targetType == PaymentTargetType.company ? 'companies' : 'jobs';
-    await _client.from(table).update({
-      'is_vip': true,
-      'vip_expires_at': vipExpiresAt.toIso8601String(),
-    }).eq('id', targetId);
+    if (targetType == PaymentTargetType.job) {
+      await _client.from('jobs').update({
+        'is_vip': true,
+        'vip_until': vipExpiresAt.toIso8601String(),
+      }).eq('id', targetId);
+      return;
+    }
+
+    if (targetType == PaymentTargetType.company) {
+      await _client.from('companies').update({
+        'is_vip': true,
+        'vip_expires_at': vipExpiresAt.toIso8601String(),
+      }).eq('id', targetId);
+    }
   }
 }

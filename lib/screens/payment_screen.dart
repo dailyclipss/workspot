@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/payment_service.dart';
 import 'home_map_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -28,10 +30,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _handlePaymentSuccess() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (!PaymentService.isValidUuid(userId) ||
+        !PaymentService.isValidUuid(widget.jobId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ödəniş üçün etibarlı hesab və elan məlumatı tapılmadı.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     try {
       await Supabase.instance.client.from('payment_requests').insert({
         'job_id': widget.jobId,
+        'user_id': userId!,
+        'package_type': 'standard_listing',
         'amount': 10,
         'package_name': 'Standart Elan',
         'payment_method': 'm10_card',
