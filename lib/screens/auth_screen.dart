@@ -58,14 +58,20 @@ class _PhoneAuthBottomSheetState extends State<_PhoneAuthBottomSheet> {
   }
 
   Future<void> _sendCode() async {
-    final phoneNumber = WhatsAppAuthService.normalizePhoneNumber(
-      _phoneController.text,
-    );
-    if (!WhatsAppAuthService.isValidAzerbaijanPhoneNumber(phoneNumber)) {
+    final digits = _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final normalizedDigits = digits.length == 9
+        ? '994$digits'
+        : digits.length == 12 && digits.startsWith('994')
+            ? digits
+            : null;
+    if (normalizedDigits == null) {
       _showError(appLang.translate('auth_invalid_phone'));
       return;
     }
 
+    final phoneNumber = WhatsAppAuthService.normalizePhoneNumber(
+      normalizedDigits,
+    );
     setState(() => _isLoading = true);
     try {
       await _whatsAppAuthService.sendOTP(phoneNumber);
@@ -125,19 +131,14 @@ class _PhoneAuthBottomSheetState extends State<_PhoneAuthBottomSheet> {
         : appLang.translate('auth_phone_login');
     return AnimatedBuilder(
       animation: appLang,
-      builder: (context, child) => AnimatedPadding(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SafeArea(
-          top: false,
+      builder: (context, child) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(context).bottom,
-            ),
             child: Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
               decoration: const BoxDecoration(

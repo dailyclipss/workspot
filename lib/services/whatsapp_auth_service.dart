@@ -18,8 +18,8 @@ class WhatsAppAuthService {
   DateTime? _expiresAt;
 
   static String normalizePhoneNumber(String phoneNumber) {
-    final normalized = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
-    return normalized.startsWith('+') ? normalized : '+$normalized';
+    final digits = phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length == 9 ? '+994$digits' : '+$digits';
   }
 
   static bool isValidAzerbaijanPhoneNumber(String phoneNumber) {
