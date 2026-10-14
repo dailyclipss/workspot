@@ -125,105 +125,120 @@ class _PhoneAuthBottomSheetState extends State<_PhoneAuthBottomSheet> {
         : appLang.translate('auth_phone_login');
     return AnimatedBuilder(
       animation: appLang,
-      builder: (context, child) => SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-          decoration: const BoxDecoration(
-            color: Color(0xFF111827),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
+      builder: (context, child) => AnimatedPadding(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              decoration: const BoxDecoration(
+                color: Color(0xFF111827),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              const SizedBox(height: 8),
-              Text(
-                _isOtpSent
-                    ? appLang.translateWithArgs(
-                        'auth_otp_sent_info',
-                        {'phone': _phoneNumber ?? ''},
-                      )
-                    : appLang.translate('auth_phone_instruction'),
-                style: const TextStyle(color: Color(0xFF94A3B8)),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _isOtpSent ? _otpController : _phoneController,
-                keyboardType:
-                    _isOtpSent ? TextInputType.number : TextInputType.phone,
-                maxLength: _isOtpSent ? 6 : null,
-                textAlign: _isOtpSent ? TextAlign.center : TextAlign.start,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: _isOtpSent ? 24 : 16,
-                  fontWeight: _isOtpSent ? FontWeight.w700 : FontWeight.normal,
-                  letterSpacing: _isOtpSent ? 8 : 0,
-                ),
-                decoration: InputDecoration(
-                  hintText: _isOtpSent
-                      ? '123456'
-                      : appLang.translate('auth_phone_placeholder'),
-                  hintStyle: const TextStyle(color: Colors.grey),
-                  counterText: '',
-                  filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-              if (_isOtpSent) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      _resendSeconds > 0
-                          ? appLang.translateWithArgs(
-                              'auth_resend_timer',
-                              {'seconds': _resendSeconds.toString()},
-                            )
-                          : appLang.translate('auth_code_not_received'),
-                      style: const TextStyle(color: Color(0xFF94A3B8)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed:
-                          _resendSeconds > 0 || _isLoading ? null : _sendCode,
-                      child: Text(appLang.translate('auth_resend')),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isOtpSent
+                        ? appLang.translateWithArgs(
+                            'auth_otp_sent_info',
+                            {'phone': _phoneNumber ?? ''},
+                          )
+                        : appLang.translate('auth_phone_instruction'),
+                    style: const TextStyle(color: Color(0xFF94A3B8)),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _isOtpSent ? _otpController : _phoneController,
+                    keyboardType:
+                        _isOtpSent ? TextInputType.number : TextInputType.phone,
+                    maxLength: _isOtpSent ? 6 : null,
+                    textAlign: _isOtpSent ? TextAlign.center : TextAlign.start,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: _isOtpSent ? 24 : 16,
+                      fontWeight:
+                          _isOtpSent ? FontWeight.w700 : FontWeight.normal,
+                      letterSpacing: _isOtpSent ? 8 : 0,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: _isOtpSent
+                          ? '123456'
+                          : appLang.translate('auth_phone_placeholder'),
+                      hintStyle: const TextStyle(color: Colors.grey),
+                      counterText: '',
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                  if (_isOtpSent) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(
+                          _resendSeconds > 0
+                              ? appLang.translateWithArgs(
+                                  'auth_resend_timer',
+                                  {'seconds': _resendSeconds.toString()},
+                                )
+                              : appLang.translate('auth_code_not_received'),
+                          style: const TextStyle(color: Color(0xFF94A3B8)),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: _resendSeconds > 0 || _isLoading
+                              ? null
+                              : _sendCode,
+                          child: Text(appLang.translate('auth_resend')),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ],
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading
-                      ? null
-                      : (_isOtpSent ? _verifyCode : _sendCode),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          _isOtpSent
-                              ? appLang.translate('auth_confirm')
-                              : appLang.translate('auth_send_code'),
-                        ),
-                ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isLoading
+                          ? null
+                          : (_isOtpSent ? _verifyCode : _sendCode),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              _isOtpSent
+                                  ? appLang.translate('auth_confirm')
+                                  : appLang.translate('auth_send_code'),
+                            ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -639,6 +654,7 @@ class _AuthScreenState extends State<AuthScreen>
         final isDark = themeService.isDarkMode;
 
         return Scaffold(
+          resizeToAvoidBottomInset: true,
           body: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
