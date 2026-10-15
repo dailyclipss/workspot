@@ -250,6 +250,7 @@ class _PhoneAuthBottomSheetState extends State<_PhoneAuthBottomSheet> {
 class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   static const _oauthRedirectUri = 'com.example.workspot://login-callback/';
+  static const _webOAuthRedirectUri = 'https://workspot.az';
   static const String _adminBypassPin = String.fromEnvironment(
     'WORKSPOT_ADMIN_BYPASS_PIN',
     defaultValue: '123456',
@@ -515,11 +516,11 @@ class _AuthScreenState extends State<AuthScreen>
     try {
       debugPrint(
         'Starting Supabase Google OAuth with redirect URI: '
-        '${kIsWeb ? Uri.base.origin : _oauthRedirectUri}',
+        '${kIsWeb ? _webOAuthRedirectUri : _oauthRedirectUri}',
       );
       final launched = await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: kIsWeb ? Uri.base.origin : _oauthRedirectUri,
+        redirectTo: kIsWeb ? _webOAuthRedirectUri : _oauthRedirectUri,
       );
       debugPrint('Supabase Google OAuth browser launched: $launched');
 
