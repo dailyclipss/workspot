@@ -23,11 +23,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _selectedFilter = 'all';
 
   // Profil Məlumatları
-  String _userName = 'Mirhüseyn Kazımzadə';
-  String _userRole = 'Flutter Developer / System Builder';
-  String _userPhone = '+994 50 123 45 67';
-  String _uploadedCvName = 'Mirhuseyn_Kazimzade_CV.pdf';
-  double _cvCompletionPercent = 0.85;
+  String _userName = '';
+  String _userRole = '';
+  String _userPhone = '';
+  bool _profileLoading = true;
+  int _savedJobsCount = 0;
+  RealtimeChannel? _realtimeChannel;
+  String _uploadedCvName = '';
+  String _cvPath = '';
   Uint8List? _profileImageBytes;
   String? _profileImageUrl;
   bool _isUploadingProfileImage = false;
@@ -46,13 +49,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _profileImageUrl = avatarUrl;
     }
     _loadAdminStatus();
+    _loadProfile();
     _fetchMyApplications();
+    _fetchSavedJobsCount();
+    _subscribeToChanges();
   }
 
   @override
   void dispose() {
+    final channel = _realtimeChannel;
+    if (channel != null) Supabase.instance.client.removeChannel(channel);
     appLang.removeListener(_onLanguageChanged);
     super.dispose();
+  }
+
+  // Theme-aware palette driven by the app-wide ThemeService via ThemeData.
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _bg =>
+      _isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+  Color get _surface => _isDark ? const Color(0xFF1E293B) : Colors.white;
+  Color get _text => _isDark ? Colors.white : const Color(0xFF0F172A);
+  Color get _textSoft =>
+      _isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
+  Color get _muted =>
+      _isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+  Color get _line =>
+      _isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+  Color get _border => _isDark ? Colors.white10 : const Color(0x1F000000);
+
+  InputDecoration _fieldDecoration(String label, String hint) {
+    OutlineInputBorder border(Color color) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: color),
+        );
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      labelStyle: TextStyle(color: _muted),
+      hintStyle: TextStyle(color: _muted),
+      filled: true,
+      fillColor: _surface,
+      enabledBorder: border(_isDark ? const Color(0xFF475569) : _line),
+      focusedBorder: border(const Color(0xFF2563EB)),
+    );
   }
 
   void _onLanguageChanged() {
@@ -67,11 +106,170 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isAdminUser = isAdmin);
   }
 
+  // Profile completeness: name, profession, phone and an uploaded CV, 25% each.
+  double get _cvCompletionPercent {
+    var filled = 0;
+    if (_userName.trim().isNotEmpty) filled++;
+    if (_userRole.trim().isNotEmpty) filled++;
+    if (_userPhone.trim().isNotEmpty) filled++;
+    if (_cvPath.isNotEmpty) filled++;
+    return filled / 4;
+  }
+
+  // Applications an employer has already reviewed or accepted.
+  int get _reviewedCount => _myApplications.where((app) {
+        final status = (app['status'] ?? '').toString().toLowerCase();
+        return status.contains('baxıldı') ||
+            status.contains('reviewed') ||
+            status.contains('qəbul') ||
+            status.contains('accepted');
+      }).length;
+
+  String get _cvLabel =>
+      _uploadedCvName.isEmpty ? appLang.translate('cv_not_uploaded') : _uploadedCvName;
+
+  Future<void> _loadProfile() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return;
+    Future<Map<String, dynamic>?> fetch(String columns) => client
+        .from('profiles')
+        .select(columns)
+        .eq('id', user.id)
+        .maybeSingle();
+
+    Map<String, dynamic>? profile;
+    try {
+      try {
+        profile = await fetch('full_name, phone, profession, cv_path, cv_name');
+      } on PostgrestException catch (error) {
+        // CV columns may not exist yet (migration not applied): the name,
+        // profession and phone must still load.
+        debugPrint('Profile load (with CV) failed: ${error.code} ${error.message}');
+        profile = await fetch('full_name, phone, profession');
+      }
+      if (!mounted) return;
+      setState(() {
+        _userName = (profile?['full_name'] ?? '').toString();
+        _userRole = (profile?['profession'] ?? '').toString();
+        _userPhone = (profile?['phone'] ?? user.phone ?? '').toString();
+        _cvPath = (profile?['cv_path'] ?? '').toString();
+        _uploadedCvName = (profile?['cv_name'] ?? '').toString();
+        _profileLoading = false;
+      });
+    } catch (error) {
+      // Keep whatever is already shown instead of wiping it on a failed read.
+      debugPrint('Profile load failed: $error');
+      if (!mounted) return;
+      setState(() {
+        if (_userPhone.isEmpty) _userPhone = user.phone ?? '';
+        _profileLoading = false;
+      });
+    }
+  }
+
+  Future<bool> _saveProfile(String name, String role, String phone) async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) {
+      _showUploadMessage(appLang.translate('edit_profile_save_failed'),
+          isError: true);
+      return false;
+    }
+    final values = {
+      'full_name': name.trim(),
+      'profession': role.trim(),
+      'phone': phone.trim(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    try {
+      // Update without sending `id`: it is not an updatable column under the
+      // column-level grants, and an upsert would try to set it.
+      final updated = await client
+          .from('profiles')
+          .update(values)
+          .eq('id', user.id)
+          .select('id');
+      if (updated.isEmpty) {
+        await client.from('profiles').insert({'id': user.id, ...values});
+      }
+      if (!mounted) return true;
+      setState(() {
+        _userName = values['full_name']!;
+        _userRole = values['profession']!;
+        _userPhone = values['phone']!;
+      });
+      return true;
+    } on PostgrestException catch (error) {
+      debugPrint('Profile save failed: ${error.code} ${error.message}');
+      _showUploadMessage(
+          '${appLang.translate('edit_profile_save_failed')} (${error.code ?? 'error'})',
+          isError: true);
+      return false;
+    } catch (error) {
+      debugPrint('Profile save failed: $error');
+      _showUploadMessage(appLang.translate('edit_profile_save_failed'),
+          isError: true);
+      return false;
+    }
+  }
+
+  Future<void> _fetchSavedJobsCount() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final count = await Supabase.instance.client
+          .from('saved_jobs')
+          .count(CountOption.exact)
+          .eq('user_id', user.id);
+      if (mounted) setState(() => _savedJobsCount = count);
+    } catch (_) {}
+  }
+
+  void _subscribeToChanges() {
+    final client = Supabase.instance.client;
+    _realtimeChannel = client
+        .channel('profile-counters')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'applications',
+          callback: (_) => _fetchMyApplications(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'saved_jobs',
+          callback: (_) => _fetchSavedJobsCount(),
+        )
+        .subscribe();
+  }
+
   Future<void> _fetchMyApplications() async {
     try {
-      final response = await Supabase.instance.client
+      final client = Supabase.instance.client;
+      final phone = client.auth.currentUser?.phone;
+      final applicant = phone == null
+          ? null
+          : await client
+              .from('users')
+              .select('id')
+              .eq('phone_number', phone)
+              .maybeSingle();
+      if (applicant == null) {
+        if (mounted) {
+          setState(() {
+            _myApplications = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      final response = await client
           .from('applications')
           .select('*, jobs(title, company_name, salary_amount, category)')
+          .eq('applicant_id', applicant['id'])
           .order('created_at', ascending: false);
 
       if (mounted) {
@@ -119,7 +317,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final safeName = file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
       final path =
           '${user.id}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      await Supabase.instance.client.storage.from('cvs').uploadBinary(
+      await Supabase.instance.client.storage.from('resumes').uploadBinary(
             path,
             bytes,
             fileOptions: const FileOptions(
@@ -127,17 +325,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               upsert: true,
             ),
           );
-      final publicUrl = Supabase.instance.client.storage
-          .from('cvs')
-          .getPublicUrl(path);
-      await Supabase.instance.client.auth.updateUser(
-        UserAttributes(data: {'cv_url': publicUrl, 'cv_name': file.name}),
-      );
+      final cvValues = {'cv_path': path, 'cv_name': file.name};
+      final updated = await Supabase.instance.client
+          .from('profiles')
+          .update(cvValues)
+          .eq('id', user.id)
+          .select('id');
+      if (updated.isEmpty) {
+        await Supabase.instance.client
+            .from('profiles')
+            .insert({'id': user.id, ...cvValues});
+      }
 
       if (!mounted) return;
       setState(() {
         _uploadedCvName = file.name;
-        _cvCompletionPercent = 1.0;
+        _cvPath = path;
         _isUploadingCv = false;
       });
       Navigator.pop(context);
@@ -240,7 +443,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showSettingsModal() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: _surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -272,11 +475,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white)),
+                              color: _text)),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        tooltip: 'Bağla',
+                        icon: Icon(Icons.close, color: _text),
+                        tooltip: appLang.translate('close'),
                       ),
                     ],
                   ),
@@ -286,13 +489,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SwitchListTile(
                     title: Text(appLang.translate('settings_notifications'),
                         style: TextStyle(
-                        color: Colors.white,
+                        color: _text,
                         fontWeight: FontWeight.w600,
                         fontSize: 14)),
                     subtitle: Text(
                       appLang.translate('notifications_nearby_subtitle'),
                       style: TextStyle(
-                        color: Colors.grey[400], fontSize: 12)),
+                        color: _muted, fontSize: 12)),
                     value: _pushNotifications,
                     activeColor: const Color(0xFF2563EB),
                     onChanged: (val) {
@@ -300,21 +503,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       setState(() {});
                     },
                   ),
-                  const Divider(color: Color(0xFF334155)),
+                  Divider(color: _line),
 
                   // WorkSpot Biznes & Paketlər
                   ListTile(
                     leading: const Icon(Icons.workspace_premium_rounded,
                         color: Color(0xFFFFD700)),
                     title: Text(appLang.translate('biznes_packages_title'),
-                        style: const TextStyle(
-                            color: Colors.white,
+                        style: TextStyle(
+                            color: _text,
                             fontWeight: FontWeight.w600,
                             fontSize: 14)),
                     subtitle: Text(
                         appLang.translate('biznes_packages_subtitle'),
-                        style:
-                            const TextStyle(color: Colors.grey, fontSize: 12)),
+                        style: TextStyle(color: _muted, fontSize: 12)),
                     onTap: () {
                       Navigator.pop(context);
                       final userId =
@@ -330,27 +532,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
-                  const Divider(color: Color(0xFF334155)),
+                  Divider(color: _line),
 
                   if (_isAdminUser) ...[
                     ListTile(
                       leading: const Icon(Icons.dashboard_rounded,
                           color: Color(0xFF38BDF8)),
-                      title: const Text('Admin Dashboard',
+                      title: Text('Admin Dashboard',
                           style: TextStyle(
-                              color: Colors.white,
+                              color: _text,
                               fontWeight: FontWeight.w600,
                               fontSize: 14)),
-                      subtitle: const Text(
+                      subtitle: Text(
                         'Total system management',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                        style: TextStyle(color: _muted, fontSize: 12),
                       ),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.pushNamed(context, '/admin');
                       },
                     ),
-                    const Divider(color: Color(0xFF334155)),
+                    Divider(color: _line),
                   ],
 
                   // Çıxış düyməsi
@@ -362,14 +564,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             color: Colors.red,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
-                    onTap: () {
+                    onTap: () async {
+                      final navigator = Navigator.of(this.context);
                       Navigator.pop(
                           context); // Əvvəlcə Ayarlar modalını bağlayır
-                      Navigator.of(context).pushAndRemoveUntil(
+                      try {
+                        await Supabase.instance.client.auth.signOut();
+                      } catch (error) {
+                        debugPrint('signOut failed: $error');
+                      }
+                      // Arxadakı bütün ekranları silir və Giriş ekranına atır
+                      navigator.pushAndRemoveUntil(
                         MaterialPageRoute(
-                            builder: (context) => const AuthScreen()),
-                        (Route<dynamic> route) =>
-                            false, // Arxadakı bütün ekranları silir və Giriş ekranına atır
+                            builder: (_) => const AuthScreen()),
+                        (Route<dynamic> route) => false,
                       );
                     },
                   ),
@@ -386,7 +594,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showCvUploadModal() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: _bg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -397,15 +605,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Rəqəmsal CV-ni Yenilə',
+              Text('Rəqəmsal CV-ni Yenilə',
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white)),
+                      color: _text)),
               const SizedBox(height: 8),
-              Text('Mövcud fayl: $_uploadedCvName',
-                  style:
-                      const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1))),
+              Text('${appLang.translate('current_file')}: $_cvLabel',
+                  style: TextStyle(fontSize: 12, color: _textSoft)),
               const SizedBox(height: 16),
 
               // Fayl Yükləmə Sahəsi
@@ -415,7 +622,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: _surface,
                     borderRadius: BorderRadius.circular(16),
                     border:
                         Border.all(color: const Color(0xFF2563EB), width: 1.5),
@@ -433,14 +640,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : const Icon(Icons.cloud_upload_outlined,
                               size: 40, color: Color(0xFF2563EB)),
                       SizedBox(height: 8),
-                      Text('PDF və ya DOCX faylı seçin',
+                      Text('PDF faylı seçin',
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF2563EB))),
                       SizedBox(height: 4),
                       Text('Maksimum fayl həcmi: 10 MB',
-                          style: TextStyle(
-                              fontSize: 11, color: Color(0xFF94A3B8))),
+                          style: TextStyle(fontSize: 11, color: _muted)),
                     ],
                   ),
                 ),
@@ -459,7 +665,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: _bg,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -483,76 +689,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white)),
+                          color: _text)),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    tooltip: 'Bağla',
+                    icon: Icon(Icons.close, color: _text),
+                    tooltip: appLang.translate('close'),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: nameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Ad və Soyad',
-                  hintText: 'Ad və soyadınızı daxil edin',
-                  labelStyle: TextStyle(color: Colors.grey[400]),
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF475569)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF2563EB)),
-                  ),
+                style: TextStyle(color: _text),
+                decoration: _fieldDecoration(
+                  appLang.translate('edit_profile_name_label'),
+                  appLang.translate('edit_profile_name_hint'),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: roleController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'İxtisas / Vəzifə',
-                  hintText: 'İxtisasınızı və ya vəzifənizi daxil edin',
-                  labelStyle: TextStyle(color: Colors.grey[400]),
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF475569)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF2563EB)),
-                  ),
+                style: TextStyle(color: _text),
+                decoration: _fieldDecoration(
+                  appLang.translate('edit_profile_role_label'),
+                  appLang.translate('edit_profile_role_hint'),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: phoneController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: _text),
                 keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Telefon Nömrəsi',
-                  hintText: '+994 50 123 45 67',
-                  labelStyle: TextStyle(color: Colors.grey[400]),
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF475569)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF2563EB)),
-                  ),
+                decoration: _fieldDecoration(
+                  appLang.translate('edit_profile_phone_label'),
+                  '+994 50 123 45 67',
                 ),
               ),
               const SizedBox(height: 20),
@@ -560,18 +730,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _userName = nameController.text;
-                      _userRole = roleController.text;
-                      _userPhone = phoneController.text;
-                    });
-                    Navigator.pop(context);
+                  onPressed: () async {
+                    final saved = await _saveProfile(nameController.text,
+                        roleController.text, phoneController.text);
+                    if (saved && context.mounted) Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB)),
-                  child: const Text('Yadda Saqla',
-                      style: TextStyle(
+                  child: Text(appLang.translate('edit_profile_save'),
+                      style: const TextStyle(
                           color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -585,16 +752,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: _bg,
       appBar: AppBar(
         title: Text(appLang.translate('profile_title'),
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: const Color(0xFF0F172A),
-        foregroundColor: Colors.white,
+        backgroundColor: _bg,
+        foregroundColor: _text,
         elevation: 0.5,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Color(0xFFCBD5E1)),
+            icon: Icon(Icons.settings_outlined, color: _textSoft),
             tooltip: appLang.translate('settings_title'),
             onPressed: _showSettingsModal,
           ),
@@ -618,9 +785,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: _surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white10),
+                      border: Border.all(color: _border),
                     ),
                     child: Column(
                       children: [
@@ -701,25 +868,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(_userName,
-                                      style: const TextStyle(
+                                  Text(
+                                      _userName.trim().isEmpty
+                                          ? _profileLoading
+                                              ? '...'
+                                              : appLang.translate(
+                                              'profile_name_placeholder')
+                                          : _userName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.white)),
+                                          color: _userName.trim().isEmpty
+                                              ? _muted
+                                              : _text)),
                                   const SizedBox(height: 2),
-                                  Text(_userRole,
-                                      style: const TextStyle(
-                                          color: Color(0xFFCBD5E1),
+                                  Text(
+                                      _userRole.trim().isEmpty
+                                          ? appLang.translate(
+                                              'profile_role_placeholder')
+                                          : _userRole,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          color: _userRole.trim().isEmpty
+                                              ? _muted
+                                              : _textSoft,
                                           fontSize: 13)),
                                   const SizedBox(height: 6),
                                   Row(
                                     children: [
-                                      const Icon(Icons.phone_outlined,
-                                          size: 14, color: Color(0xFF94A3B8)),
+                                      Icon(Icons.phone_outlined,
+                                          size: 14, color: _muted),
                                       const SizedBox(width: 4),
-                                      Text(_userPhone,
-                                          style: const TextStyle(
-                                              color: Color(0xFFCBD5E1),
+                                      Text(
+                                          _userPhone.trim().isEmpty
+                                              ? appLang.translate(
+                                                  'profile_phone_placeholder')
+                                              : _userPhone,
+                                          style: TextStyle(
+                                              color: _userPhone.trim().isEmpty
+                                                  ? _muted
+                                                  : _textSoft,
                                               fontSize: 12)),
                                     ],
                                   ),
@@ -734,7 +925,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ],
                         ),
                         const SizedBox(height: 18),
-                        const Divider(height: 1, color: Color(0xFF334155)),
+                        Divider(height: 1, color: _line),
                         const SizedBox(height: 16),
 
                         // Rəqəmsal CV Statusu və Yükləmə Düyməsi
@@ -753,7 +944,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
-                                            color: Colors.white)),
+                                            color: _text)),
                                   ],
                                 ),
                                 Text('${(_cvCompletionPercent * 100).toInt()}%',
@@ -769,7 +960,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: LinearProgressIndicator(
                                 value: _cvCompletionPercent,
                                 minHeight: 8,
-                                backgroundColor: const Color(0xFF334155),
+                                backgroundColor: _line,
                                 valueColor: const AlwaysStoppedAnimation<Color>(
                                     Color(0xFF2563EB)),
                               ),
@@ -782,7 +973,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               icon: const Icon(Icons.upload_file_rounded,
                                   size: 18, color: Colors.white),
                               label: Text(
-                                  '${appLang.translate('update_cv')} ($_uploadedCvName)',
+                                  '${appLang.translate('update_cv')} ($_cvLabel)',
                                   style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 12,
@@ -809,9 +1000,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           padding: const EdgeInsets.symmetric(
                               vertical: 16, horizontal: 12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
+                            color: _surface,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white10),
+                            border: Border.all(color: _border),
                           ),
                           child: Column(
                             children: [
@@ -824,7 +1015,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Text(appLang.translate('stat_applications'),
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color: Color(0xFFCBD5E1),
+                                      color: _textSoft,
                                       fontWeight: FontWeight.w500)),
                             ],
                           ),
@@ -836,14 +1027,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           padding: const EdgeInsets.symmetric(
                               vertical: 16, horizontal: 12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
+                            color: _surface,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white10),
+                            border: Border.all(color: _border),
                           ),
                           child: Column(
                             children: [
-                              Text('12',
-                                  style: TextStyle(
+                              Text('$_reviewedCount',
+                                  style: const TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.green)),
@@ -851,7 +1042,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Text(appLang.translate('stat_cv_views'),
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color: Color(0xFFCBD5E1),
+                                      color: _textSoft,
                                       fontWeight: FontWeight.w500)),
                             ],
                           ),
@@ -863,13 +1054,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           padding: const EdgeInsets.symmetric(
                               vertical: 16, horizontal: 12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
+                            color: _surface,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white10),
+                            border: Border.all(color: _border),
                           ),
                           child: Column(
                             children: [
-                              Text('5',
+                              Text('$_savedJobsCount',
                                   style: TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.bold,
@@ -878,7 +1069,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Text(appLang.translate('stat_favorites'),
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color: Color(0xFFCBD5E1),
+                                      color: _textSoft,
                                       fontWeight: FontWeight.w500)),
                             ],
                           ),
@@ -896,11 +1087,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white)),
+                              color: _text)),
                       IconButton(
                         icon: const Icon(Icons.sync_rounded,
                             size: 22, color: Color(0xFF2563EB)),
-                        tooltip: 'Yenilə',
+                        tooltip: appLang.translate('refresh'),
                         onPressed: () {
                           setState(() => _isLoading = true);
                           _fetchMyApplications();
@@ -920,14 +1111,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               '${appLang.translate('tab_all')} (${_myApplications.length})'),
                           selected: _selectedFilter == 'all',
                           selectedColor: const Color(0xFF2563EB),
-                          backgroundColor: const Color(0xFF1E293B),
-                          side: const BorderSide(color: Colors.white10),
+                          backgroundColor: _surface,
+                          side: BorderSide(color: _border),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20)),
                           labelStyle: TextStyle(
                               color: _selectedFilter == 'all'
                                   ? Colors.white
-                                  : const Color(0xFFCBD5E1),
+                                  : _textSoft,
                               fontSize: 12),
                           onSelected: (val) =>
                               setState(() => _selectedFilter = 'all'),
@@ -937,14 +1128,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           label: Text(appLang.translate('tab_reviewed')),
                           selected: _selectedFilter == 'reviewed',
                           selectedColor: const Color(0xFF2563EB),
-                          backgroundColor: const Color(0xFF1E293B),
-                          side: const BorderSide(color: Colors.white10),
+                          backgroundColor: _surface,
+                          side: BorderSide(color: _border),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20)),
                           labelStyle: TextStyle(
                               color: _selectedFilter == 'reviewed'
                                   ? Colors.white
-                                  : const Color(0xFFCBD5E1),
+                                  : _textSoft,
                               fontSize: 12),
                           onSelected: (val) =>
                               setState(() => _selectedFilter = 'reviewed'),
@@ -954,14 +1145,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           label: Text(appLang.translate('tab_accepted')),
                           selected: _selectedFilter == 'accepted',
                           selectedColor: const Color(0xFF2563EB),
-                          backgroundColor: const Color(0xFF1E293B),
-                          side: const BorderSide(color: Colors.white10),
+                          backgroundColor: _surface,
+                          side: BorderSide(color: _border),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20)),
                           labelStyle: TextStyle(
                               color: _selectedFilter == 'accepted'
                                   ? Colors.white
-                                  : const Color(0xFFCBD5E1),
+                                  : _textSoft,
                               fontSize: 12),
                           onSelected: (val) =>
                               setState(() => _selectedFilter = 'accepted'),
@@ -982,9 +1173,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               padding: const EdgeInsets.all(32),
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1E293B),
+                                color: _surface,
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white10),
+                                border: Border.all(color: _border),
                               ),
                               child: Column(
                                 children: [
@@ -1004,7 +1195,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Text(
                                     appLang.translate('no_applications_yet'),
                                     style: TextStyle(
-                                        color: Colors.white,
+                                        color: _text,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15),
                                   ),
@@ -1012,8 +1203,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Text(
                                     appLang.translate('no_applications_sub'),
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                        color: Color(0xFF94A3B8), fontSize: 13),
+                                    style: TextStyle(
+                                        color: _muted, fontSize: 13),
                                   ),
                                   const SizedBox(height: 18),
                                   ElevatedButton.icon(
@@ -1056,9 +1247,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 12),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF1E293B),
+                                    color: _surface,
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.white10),
+                                    border: Border.all(color: _border),
                                     boxShadow: [
                                       BoxShadow(
                                           color: Colors.black.withOpacity(0.02),
@@ -1079,7 +1270,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                     title: Text(
                                       jobData?['title'] ?? 'Vakansiya',
-                                      style: const TextStyle(
+                                      style: TextStyle(
+                                          color: _text,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 15),
                                     ),
@@ -1087,9 +1279,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       padding: const EdgeInsets.only(top: 4.0),
                                       child: Text(
                                         '${jobData?['company_name'] ?? 'Şirkət'} • ${jobData?['salary_amount'] ?? 0} AZN',
-                                        style: const TextStyle(
-                                            color: Color(0xFF94A3B8),
-                                            fontSize: 13),
+                                        style: TextStyle(
+                                            color: _muted, fontSize: 13),
                                       ),
                                     ),
                                     trailing: Container(

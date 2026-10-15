@@ -1,4 +1,8 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'app_language.dart';
 
@@ -93,6 +97,69 @@ class PaymentService {
 
   static bool isValidUuid(String? value) =>
       value != null && _uuidPattern.hasMatch(value.trim());
+
+  /// Epoint public key (safe to ship in the app). The private key must live
+  /// only on the backend (see supabase/functions/epoint-create-payment).
+  static const String epointPublicKey = 'i000201987';
+
+  static const String _epointFunctionUrl =
+      'https://erlguuogmrgyhuhbecny.supabase.co/functions/v1/epoint-create-payment';
+
+  /// Asks the backend (Supabase Edge Function `epoint-create-payment`) to
+  /// create an Epoint checkout and opens the returned payment page.
+  /// Returns null on success, or an error message.
+  Future<String?> createPayment({
+    required PaymentPackage package,
+    required String targetId,
+    required PaymentTargetType targetType,
+  }) async {
+    try {
+      final session = _client.auth.currentSession;
+      final userId = _client.auth.currentUser?.id;
+      if (session == null || !isValidUuid(userId)) {
+        return 'An authenticated user is required to make a payment.';
+      }
+      if (!isValidUuid(targetId)) {
+        return 'A valid job, company, or subscription UUID is required.';
+      }
+
+      final response = await http
+          .post(
+            Uri.parse(_epointFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${session.accessToken}',
+            },
+            body: jsonEncode({
+              'public_key': epointPublicKey,
+              'amount': package.amount,
+              'currency': package.currency,
+              'package_id': package.id,
+              'target_id': targetId,
+              'target_type': targetType.name,
+              'user_id': userId,
+              'description': appLang.translate(package.nameKey),
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return 'Payment server error (${response.statusCode}).';
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final redirectUrl = body['redirect_url'] as String?;
+      if (redirectUrl == null || redirectUrl.isEmpty) {
+        return 'Payment page URL was not returned.';
+      }
+      final uri = Uri.parse(redirectUrl);
+      if (uri.scheme != 'https') return 'Invalid payment page URL.';
+
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return opened ? null : 'Could not open the payment page.';
+    } catch (error) {
+      return '${appLang.translate('payment_failed_prefix')} $error';
+    }
+  }
 
   Future<PaymentResult> payWithLocalPos({
     required PaymentPackage package,

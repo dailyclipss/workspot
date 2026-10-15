@@ -126,6 +126,22 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
 
     setState(() => _isProcessing = true);
 
+    if (_isProPackage || package.id == 'enterprise') {
+      final error = await PaymentService.instance.createPayment(
+        package: package,
+        targetId: targetId,
+        targetType: widget.targetType,
+      );
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
     final result = _isProPackage
         ? await PaymentService.instance.payWithInAppPurchase(
             package: package,

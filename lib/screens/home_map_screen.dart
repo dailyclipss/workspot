@@ -13,7 +13,6 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:google_maps_flutter/google_maps_flutter.dart'
     hide Cluster, ClusterManager;
 import 'package:url_launcher/url_launcher.dart';
-import 'admin_dashboard_screen.dart';
 import '../core/services/application_service.dart';
 import '../models/job_model.dart';
 import '../services/app_language.dart';
@@ -145,7 +144,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   String _selectedCategory = 'all';
   String _selectedJobType = 'all';
   double _radiusKm = 30.0;
-  RangeValues _salaryRange = const RangeValues(0, 100000);
+  static const double _salaryMin = 0;
+  static const double _salaryMax = 10000;
+  static const int _salaryDivisions = 100; // 100 ₼ addım
+  RangeValues _salaryRange = const RangeValues(_salaryMin, _salaryMax);
   bool _showOnlyVerified = false;
   final Map<String, BitmapDescriptor> _singleMarkerIcons = {};
   final Map<String, BitmapDescriptor> _clusterBadgeIcons = {};
@@ -692,12 +694,49 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   List<Map<String, dynamic>> get _jobs => _filteredJobs;
 
   List<_JobClusterItem> _buildClusterItems() {
-    return _jobs.where((job) {
-      return _jobPoint(job) != null && _shouldShowJobOnMap(job);
-    }).map((job) {
-      final point = _jobPoint(job)!;
-      return _JobClusterItem(job: job, point: point);
-    }).toList();
+    final entries = <MapEntry<Map<String, dynamic>, LatLng>>[];
+    for (final job in _jobs) {
+      final point = _jobPoint(job);
+      if (point != null && _shouldShowJobOnMap(job)) {
+        entries.add(MapEntry(job, point));
+      }
+    }
+
+    // Jobs sharing (almost) the same coordinate would stack exactly on top of
+    // each other even at max zoom, so fan them out on small rings (~8-20 m).
+    final groups = <String, List<MapEntry<Map<String, dynamic>, LatLng>>>{};
+    for (final entry in entries) {
+      final key =
+          '${entry.value.latitude.toStringAsFixed(5)},${entry.value.longitude.toStringAsFixed(5)}';
+      groups.putIfAbsent(key, () => []).add(entry);
+    }
+
+    final items = <_JobClusterItem>[];
+    for (final group in groups.values) {
+      if (group.length == 1) {
+        items.add(_JobClusterItem(job: group.first.key, point: group.first.value));
+        continue;
+      }
+      group.sort((a, b) => (a.key['id']?.toString() ?? '')
+          .compareTo(b.key['id']?.toString() ?? ''));
+      final center = group.first.value;
+      for (var i = 0; i < group.length; i++) {
+        final ring = 1 + i ~/ 8;
+        final slotsInRing = 8;
+        final angle = 2 * math.pi * (i % slotsInRing) / slotsInRing +
+            (ring.isEven ? math.pi / slotsInRing : 0);
+        final radiusMeters = 8.0 * ring + 4.0;
+        final dLat = radiusMeters * math.sin(angle) / 111320.0;
+        final dLng = radiusMeters *
+            math.cos(angle) /
+            (111320.0 * math.cos(center.latitude * math.pi / 180.0));
+        items.add(_JobClusterItem(
+          job: group[i].key,
+          point: LatLng(center.latitude + dLat, center.longitude + dLng),
+        ));
+      }
+    }
+    return items;
   }
 
   void _syncClusterItems() {
@@ -1145,7 +1184,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         continue;
       }
 
-      if (!(salary >= _salaryRange.start && salary <= _salaryRange.end)) {
+      final aboveMax =
+          _salaryRange.end < _salaryMax && salary > _salaryRange.end;
+      if (salary < _salaryRange.start || aboveMax) {
         salaryRejected++;
         continue;
       }
@@ -1493,19 +1534,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             ),
             _buildVipBizButton(),
             IconButton(
-              icon: const Icon(Icons.admin_panel_settings,
-                  color: Colors.blueAccent),
-              tooltip: 'Admin Paneli',
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const AdminDashboardScreen()),
-                );
-                if (mounted) await _fetchMapJobs();
-              },
-            ),
-            IconButton(
               icon: const Icon(Icons.notifications_none_rounded),
               onPressed: () async {
                 await Navigator.push(
@@ -1674,9 +1702,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           ),
           RangeSlider(
             values: _salaryRange,
-            min: 0,
-            max: 100000,
-            divisions: 100,
+            min: _salaryMin,
+            max: _salaryMax,
+            divisions: _salaryDivisions,
             activeColor: const Color(0xFF2563EB),
             onChanged: (values) async {
               setState(() => _salaryRange = values);
@@ -1796,7 +1824,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     setState(() {
       _radiusKm = 30.0;
       _selectedJobType = 'all';
-      _salaryRange = const RangeValues(0, 100000);
+      _salaryRange = const RangeValues(_salaryMin, _salaryMax);
       _showOnlyVerified = false;
       _selectedCategory = 'all';
       _searchController.clear();
