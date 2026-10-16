@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,12 +24,38 @@ serve(async (req) => {
       });
     }
 
+    const finalOrderId = orderId || `order_${Date.now()}`;
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    // İstifadəçi tokeni varsa sifarişi ona bağlayırıq
+    let userId: string | null = null;
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (token) {
+      const { data: userData } = await supabase.auth.getUser(token);
+      userId = userData?.user?.id ?? null;
+    }
+
+    const { error: insertError } = await supabase
+      .from('orders')
+      .insert({ order_id: finalOrderId, user_id: userId, status: 'pending' });
+
+    if (insertError) {
+      return new Response(JSON.stringify({ error: insertError.message }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const data = {
       public_key: publicKey,
       amount: amount || "1.00",
       currency: "AZN",
       language: "az",
-      order_id: orderId || `order_${Date.now()}`,
+      order_id: finalOrderId,
       description: description || "Workspot ödənişi",
       success_redirect_url: "https://workspot.az/payment/success",
       error_redirect_url: "https://workspot.az/payment/error"
