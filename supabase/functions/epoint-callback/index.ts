@@ -3,13 +3,40 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 serve(async (req) => {
   try {
-    const formData = await req.formData();
-    const dataBase64 = formData.get('data') as string;
-    const receivedSign = (formData.get('signature') ?? formData.get('sign')) as string;
+    const contentType = req.headers.get('content-type') ?? '';
+    let dataBase64: string | null = null;
+    let receivedSign: string | null = null;
+
+    // Epoint form-urlencoded göndərir, amma JSON/multipart halına da dözümlü oluruq
+    if (contentType.includes('application/json')) {
+      const body = await req.json();
+      dataBase64 = body.data ?? null;
+      receivedSign = body.signature ?? body.sign ?? null;
+    } else {
+      const raw = await req.text();
+      if (contentType.includes('multipart/form-data')) {
+        const fd = await new Response(raw, { headers: { 'content-type': contentType } }).formData();
+        dataBase64 = fd.get('data') as string | null;
+        receivedSign = (fd.get('signature') ?? fd.get('sign')) as string | null;
+      } else {
+        const params = new URLSearchParams(raw);
+        dataBase64 = params.get('data');
+        receivedSign = params.get('signature') ?? params.get('sign');
+      }
+    }
+    // URL-decode zamanı '+' işarəsi boşluğa çevrilə bilər
+    dataBase64 = dataBase64?.replace(/ /g, '+') ?? null;
+    receivedSign = receivedSign?.replace(/ /g, '+') ?? null;
 
     const privateKey = Deno.env.get('EPOINT_PRIVATE_KEY');
 
     if (!dataBase64 || !receivedSign || !privateKey) {
+      console.error('Epoint callback: missing parameter', {
+        contentType,
+        hasData: !!dataBase64,
+        hasSignature: !!receivedSign,
+        hasPrivateKey: !!privateKey,
+      });
       return new Response('Bad Request', { status: 400 });
     }
 
@@ -21,6 +48,12 @@ serve(async (req) => {
     const expectedSignature = btoa(String.fromCharCode(...hashArray));
 
     if (expectedSignature !== receivedSign) {
+      console.error('Epoint callback: invalid signature', {
+        contentType,
+        received: receivedSign,
+        expected: expectedSignature,
+        dataLength: dataBase64.length,
+      });
       return new Response('Invalid Signature', { status: 400 });
     }
 
