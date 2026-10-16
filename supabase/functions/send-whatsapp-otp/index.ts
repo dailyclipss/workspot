@@ -39,22 +39,51 @@ Deno.serve(async (request) => {
     const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
     const messageText = `WorkSpot təsdiq kodunuz: ${otpCode}`;
 
+    const templateName = Deno.env.get('WHATSAPP_TEMPLATE_NAME');
+    // Meta-nın test şablonu hello_world parametr qəbul etmir və yalnız en_US dilindədir
+    const isHelloWorld = templateName === 'hello_world';
+    const templateLang =
+      Deno.env.get('WHATSAPP_TEMPLATE_LANG') ?? (isHelloWorld ? 'en_US' : 'az');
+
     // Meta WhatsApp Cloud API: token və göndərən nömrənin ID-si varsa birbaşa göndəririk
     if (whatsappToken && phoneNumberId) {
+      const template = {
+        name: templateName,
+        language: { code: templateLang },
+        ...(isHelloWorld
+          ? {}
+          : {
+            // Authentication şablonu: kod həm gövdədə, həm "copy code" düyməsindədir
+            components: [
+              { type: 'body', parameters: [{ type: 'text', text: otpCode }] },
+              {
+                type: 'button',
+                sub_type: 'url',
+                index: '0',
+                parameters: [{ type: 'text', text: otpCode }],
+              },
+            ],
+          }),
+      };
+
       const graphResponse = await fetch(
-        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+        `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
         {
           method: 'POST',
           headers: {
             'Authorization': 'Bearer ' + whatsappToken,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: phone,
-            type: 'text',
-            text: { body: messageText },
-          }),
+          body: JSON.stringify(
+            templateName
+              ? { messaging_product: 'whatsapp', to: phone, type: 'template', template }
+              : {
+                messaging_product: 'whatsapp',
+                to: phone,
+                type: 'text',
+                text: { body: messageText },
+              },
+          ),
         },
       );
 
