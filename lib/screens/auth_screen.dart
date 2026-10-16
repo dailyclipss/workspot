@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/app_language.dart';
 import '../services/theme_service.dart';
 import '../services/whatsapp_auth_service.dart';
+import '../widgets/legal_footer.dart';
 import 'home_map_screen.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -1144,6 +1145,8 @@ class _AuthScreenState extends State<AuthScreen>
                                     ],
                                   ),
                                 ),
+                                const SizedBox(height: 16),
+                                const LegalFooter(),
                               ],
                             ),
                           ),
