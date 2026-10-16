@@ -103,9 +103,9 @@ class PaymentService {
   static const String epointPublicKey = 'i000201987';
 
   static const String _epointFunctionUrl =
-      'https://erlguuogmrgyhuhbecny.supabase.co/      functions/v1/epoint-create';
+      'https://erlguuogmrgyhuhbecny.supabase.co/functions/v1/epoint-create';
 
-        /// Asks the backend (Supabase Edge Function `epoint-create`) to
+  /// Asks the backend (Supabase Edge Function `epoint-create`) to
   /// create an Epoint checkout and opens the returned payment page.
   /// Returns null on success, or an error message.
   Future<String?> createPayment({
