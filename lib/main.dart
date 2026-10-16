@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/theme_service.dart';
@@ -7,11 +8,15 @@ import 'services/app_language.dart';
 import 'screens/auth_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/admin_login_screen.dart';
+import 'widgets/legal_footer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  if (kIsWeb) {
+    usePathUrlStrategy();
+  }
   if (!kIsWeb) {
     await MobileAds.instance.initialize();
   }
@@ -73,12 +78,27 @@ class MyApp extends StatelessWidget {
                   settings: settings,
                   builder: (_) => const AdminLoginScreen(),
                 );
+              case '/about':
+                return _legalRoute(settings, LegalPageType.about);
+              case '/contact':
+                return _legalRoute(settings, LegalPageType.contact);
+              case '/privacy':
+                return _legalRoute(settings, LegalPageType.privacy);
+              case '/terms':
+                return _legalRoute(settings, LegalPageType.terms);
               default:
                 return null;
             }
           },
         );
       },
+    );
+  }
+
+  static Route<dynamic> _legalRoute(RouteSettings settings, LegalPageType type) {
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (_) => LegalPage(type: type),
     );
   }
 }
