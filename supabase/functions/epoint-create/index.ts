@@ -73,7 +73,8 @@ serve(async (req) => {
 
     const data = {
       public_key: publicKey,
-      amount: amount || "1.00",
+      // TEMP: test üçün məbləğ 0.01-ə sabitlənib, canlıya çıxmazdan əvvəl `amount || "1.00"`-a qaytar
+      amount: "0.01",
       currency: "AZN",
       language: "az",
       order_id: finalOrderId,
