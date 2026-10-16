@@ -99,13 +99,13 @@ class PaymentService {
       value != null && _uuidPattern.hasMatch(value.trim());
 
   /// Epoint public key (safe to ship in the app). The private key must live
-  /// only on the backend (see supabase/functions/epoint-create-payment).
+  /// only on the backend (see supabase/functions/epoint-create).
   static const String epointPublicKey = 'i000201987';
 
   static const String _epointFunctionUrl =
-      'https://erlguuogmrgyhuhbecny.supabase.co/functions/v1/epoint-create-payment';
+      'https://erlguuogmrgyhuhbecny.supabase.co/      functions/v1/epoint-create';
 
-  /// Asks the backend (Supabase Edge Function `epoint-create-payment`) to
+        /// Asks the backend (Supabase Edge Function `epoint-create`) to
   /// create an Epoint checkout and opens the returned payment page.
   /// Returns null on success, or an error message.
   Future<String?> createPayment({
