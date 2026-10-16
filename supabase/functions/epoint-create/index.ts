@@ -102,9 +102,38 @@ serve(async (req) => {
       body: params.toString(),
     });
 
-    const result = await response.json();
+    const rawText = await response.text();
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(rawText);
+    } catch (_) {
+      result = { status: 'error', message: 'Non-JSON response from Epoint', raw: rawText.slice(0, 500) };
+    }
 
-    return new Response(JSON.stringify(result), {
+    const paymentUrl = (result.redirect_url ?? result.url) as string | undefined;
+
+    if (!response.ok || result.status !== 'success' || !paymentUrl) {
+      console.error('Epoint request failed', {
+        httpStatus: response.status,
+        orderId: finalOrderId,
+        result,
+      });
+      await supabase
+        .from('orders')
+        .update({ status: 'failed', payment_info: result })
+        .eq('order_id', finalOrderId);
+
+      return new Response(
+        JSON.stringify({
+          error: (result.message as string) || 'Epoint payment request failed',
+          epoint_http_status: response.status,
+          epoint_response: result,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
+      );
+    }
+
+    return new Response(JSON.stringify({ ...result, redirect_url: paymentUrl, url: paymentUrl }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

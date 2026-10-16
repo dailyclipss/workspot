@@ -143,11 +143,18 @@ class PaymentService {
           )
           .timeout(const Duration(seconds: 30));
 
+      Map<String, dynamic> body = {};
+      try {
+        body = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {}
+
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return 'Payment server error (${response.statusCode}).';
+        final detail = body['error'] ?? body['message'];
+        return 'Payment server error (${response.statusCode})'
+            '${detail != null ? ': $detail' : '.'}';
       }
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      final redirectUrl = body['redirect_url'] as String?;
+      final redirectUrl =
+          (body['redirect_url'] ?? body['url']) as String?;
       if (redirectUrl == null || redirectUrl.isEmpty) {
         return 'Payment page URL was not returned.';
       }
