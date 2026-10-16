@@ -34,8 +34,44 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: 'Invalid phone number or OTP code.' }, 400);
     }
 
+    const whatsappToken =
+      Deno.env.get('WHATSAPP_TOKEN') ?? Deno.env.get('WHATSAPP_ACCESS_TOKEN');
+    const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
+    const messageText = `WorkSpot təsdiq kodunuz: ${otpCode}`;
+
+    // Meta WhatsApp Cloud API: token və göndərən nömrənin ID-si varsa birbaşa göndəririk
+    if (whatsappToken && phoneNumberId) {
+      const graphResponse = await fetch(
+        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + whatsappToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: phone,
+            type: 'text',
+            text: { body: messageText },
+          }),
+        },
+      );
+
+      if (!graphResponse.ok) {
+        const responseBody = await graphResponse.text();
+        console.error(
+          `WhatsApp Cloud API failed (${graphResponse.status}): ${responseBody}`,
+        );
+        return jsonResponse({ error: 'WhatsApp OTP could not be sent.' }, 502);
+      }
+
+      return jsonResponse({ success: true });
+    }
+
     const providerEndpoint = Deno.env.get('WHATSAPP_OTP_PROVIDER_ENDPOINT');
-    const providerApiKey = Deno.env.get('WHATSAPP_OTP_PROVIDER_API_KEY');
+    const providerApiKey =
+      Deno.env.get('WHATSAPP_OTP_PROVIDER_API_KEY') ?? whatsappToken;
     if (!providerEndpoint || !providerApiKey) {
       console.error('WhatsApp OTP provider configuration is missing.');
       return jsonResponse({ error: 'WhatsApp OTP provider is not configured.' }, 500);
@@ -49,7 +85,7 @@ Deno.serve(async (request) => {
       },
       body: JSON.stringify({
         phone,
-        message: `WorkSpot təsdiq kodunuz: ${otpCode}`,
+        message: messageText,
       }),
     });
 
