@@ -12,7 +12,15 @@ serve(async (req) => {
   }
 
   try {
-    const { amount, description, orderId } = await req.json();
+    const {
+      amount,
+      description,
+      orderId,
+      package_id: packageId,
+      target_id: targetId,
+      target_type: targetType,
+      user_id: bodyUserId,
+    } = await req.json();
 
     const publicKey = Deno.env.get('EPOINT_PUBLIC_KEY');
     const privateKey = Deno.env.get('EPOINT_PRIVATE_KEY');
@@ -31,7 +39,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // İstifadəçi tokeni varsa sifarişi ona bağlayırıq
+    // user_id yalnız tokendən götürülür; body-dəki dəyər tokenlə uyğun olmalıdır
     let userId: string | null = null;
     const token = req.headers.get('Authorization')?.replace('Bearer ', '');
     if (token) {
@@ -39,9 +47,22 @@ serve(async (req) => {
       userId = userData?.user?.id ?? null;
     }
 
-    const { error: insertError } = await supabase
-      .from('orders')
-      .insert({ order_id: finalOrderId, user_id: userId, status: 'pending' });
+    if (bodyUserId && bodyUserId !== userId) {
+      return new Response(JSON.stringify({ error: 'user_id does not match the authenticated user' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { error: insertError } = await supabase.from('orders').insert({
+      order_id: finalOrderId,
+      user_id: userId,
+      status: 'pending',
+      amount: amount ?? null,
+      package_id: packageId ?? null,
+      target_id: targetId ?? null,
+      target_type: targetType ?? null,
+    });
 
     if (insertError) {
       return new Response(JSON.stringify({ error: insertError.message }), {
