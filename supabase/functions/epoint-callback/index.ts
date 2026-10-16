@@ -5,7 +5,7 @@ serve(async (req) => {
   try {
     const formData = await req.formData();
     const dataBase64 = formData.get('data') as string;
-    const receivedSign = formData.get('sign') as string;
+    const receivedSign = (formData.get('signature') ?? formData.get('sign')) as string;
 
     const privateKey = Deno.env.get('EPOINT_PRIVATE_KEY');
 

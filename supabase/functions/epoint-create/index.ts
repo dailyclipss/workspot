@@ -94,7 +94,7 @@ serve(async (req) => {
 
     const params = new URLSearchParams();
     params.append('data', dataBase64);
-    params.append('sign', signature);
+    params.append('signature', signature);
 
     const response = await fetch('https://epoint.az/api/1/request', {
       method: 'POST',
