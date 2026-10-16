@@ -24,18 +24,39 @@ serve(async (req) => {
       return new Response('Invalid Signature', { status: 400 });
     }
 
-    const decodedData = JSON.parse(atob(dataBase64));
+    const decodedData = JSON.parse(new TextDecoder().decode(
+      Uint8Array.from(atob(dataBase64), (c) => c.charCodeAt(0)),
+    ));
+    console.log('Epoint callback', decodedData);
 
-    if (decodedData.status === 'success') {
-      // Supabase bazasını yeniləyirik
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
+    const rawStatus = String(decodedData.status ?? '').toLowerCase();
+    const newStatus = (rawStatus === 'success' || rawStatus === '1')
+      ? 'paid'
+      : (rawStatus === 'failed' || rawStatus === 'error' || rawStatus === '0')
+      ? 'failed'
+      : null;
 
-      await supabase
+    if (newStatus && decodedData.order_id) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      );
+
+      // Ödənilmiş sifarişin statusu geri 'failed'-ə dəyişməsin
+      const { data: updated, error: updateError } = await supabase
         .from('orders')
-        .update({ status: 'paid', payment_info: decodedData })
-        .eq('order_id', decodedData.order_id);
+        .update({ status: newStatus, payment_info: decodedData })
+        .eq('order_id', decodedData.order_id)
+        .neq('status', 'paid')
+        .select('order_id');
+
+      if (updateError) {
+        console.error('orders update failed', updateError);
+        return new Response(updateError.message, { status: 500 });
+      }
+      if (!updated || updated.length === 0) {
+        console.warn('No order updated for', decodedData.order_id);
+      }
     }
 
     return new Response('OK', { status: 200 });

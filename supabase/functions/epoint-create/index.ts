@@ -78,6 +78,7 @@ serve(async (req) => {
       currency: "AZN",
       language: "az",
       order_id: finalOrderId,
+      result_url: "https://erlguuogmrgyhuhbecny.supabase.co/functions/v1/epoint-callback",
       description: description || "Workspot ödənişi",
       success_redirect_url: "https://workspot.az/payment/success",
       error_redirect_url: "https://workspot.az/payment/error"
