@@ -33156,14 +33156,14 @@ aBg:function aBg(a){this.a=a},
 aBe:function aBe(a,b){this.a=a
 this.b=b},
 aBf:function aBf(){},
-akf(a,b,c){var s=0,r=A.w(t.y),q,p,o
-var $async$akf=A.r(function(d,e){if(d===1)return A.t(e,r)
+akf(a,b,c,d){var s=0,r=A.w(t.y),q,p,o
+var $async$akf=A.r(function(e,f){if(e===1)return A.t(f,r)
 for(;;)switch(s){case 0:o=A
 s=3
-return A.n(a.E9(b,null,c,null,a.f+"/authorize"),$async$akf)
-case 3:p=o.d2(e.b,0,null)
+return A.n(a.E9(b,null,d,null,a.f+"/authorize"),$async$akf)
+case 3:p=o.d2(f.b,0,null)
 b.k(0,B.ut)
-q=A.xp(p,B.pN,"_self")
+q=A.xp(p,c,"_self")
 s=1
 break
 case 1:return A.u(q,r)}})
@@ -118391,7 +118391,7 @@ A.cP().$1("Starting Supabase Google OAuth with redirect URI: https://workspot.az
 g=$.cC().b
 g===$&&A.b()
 s=7
-return A.n(A.akf(g.gde(),B.ut,"https://workspot.az"),$async$Eg)
+return A.n(A.akf(g.gde(),B.ut,B.pN,"https://workspot.az"),$async$Eg)
 case 7:l=b
 A.cP().$1("Supabase Google OAuth browser launched: "+A.k(l))
 if(!l&&m.c!=null)m.c.a5(t.L).f.dh(B.aBw)
