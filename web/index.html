@@ -8,7 +8,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="A new Flutter project.">
   <style>
     html, body, flutter-view, flt-glass-pane {
@@ -20,6 +20,13 @@
       top: 0 !important;
       left: 0 !important;
       overflow: hidden !important;
+    }
+    html, body {
+      height: 100% !important;
+      height: -webkit-fill-available !important;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
     }
   </style>
   <meta name="theme-color" content="#ffffff">
