@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart' show LaunchMode;
 
 import '../services/app_language.dart';
 import '../services/theme_service.dart';
@@ -522,6 +523,11 @@ class _AuthScreenState extends State<AuthScreen>
       final launched = await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: kIsWeb ? _webOAuthRedirectUri : _oauthRedirectUri,
+        // In-app browser may stay on a blank page after the callback;
+        // the system browser reliably hands the deep link back to the app.
+        authScreenLaunchMode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
       );
       debugPrint('Supabase Google OAuth browser launched: $launched');
 
