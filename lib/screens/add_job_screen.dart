@@ -675,11 +675,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
                         ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                _salaryByAgreement ? 'Maaş: Razılaşma ilə' : 'Maaş: ${_salaryDisplayValue()}',
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-              ),
             ],
           ),
         ),
