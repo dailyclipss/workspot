@@ -410,8 +410,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -651,29 +649,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
                       zoomControlsEnabled: false,
                       mapToolbarEnabled: false,
                       compassEnabled: false,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFCBD5E1).withOpacity(0.35)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Seçilən koordinat',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 6),
-                        Text('Rayon: ${_selectedDistrictPreview}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        Text('Lat: ${_selectedLocation.latitude.toStringAsFixed(6)}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                        Text('Lng: ${_selectedLocation.longitude.toStringAsFixed(6)}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      ],
                     ),
                   ),
                 ],
