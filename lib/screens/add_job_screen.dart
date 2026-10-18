@@ -235,6 +235,13 @@ class _AddJobScreenState extends State<AddJobScreen> {
         ),
       };
 
+  num _salaryAmountValue() {
+    if (_salaryByAgreement) return 0;
+    final numeric = _salaryController.text.replaceAll(RegExp(r'[^0-9,\.]'), '').replaceAll(',', '.');
+    final parsed = double.tryParse(numeric) ?? 0;
+    return parsed == parsed.roundToDouble() ? parsed.toInt() : parsed;
+  }
+
   String? _requiredValidator(String? value, String message) {
     if (value == null || value.trim().isEmpty) return message;
     return null;
@@ -280,6 +287,11 @@ class _AddJobScreenState extends State<AddJobScreen> {
       'category': _selectedCategory ?? 'Xidmət',
       'district': districtValue,
       'description': _descriptionController.text.trim(),
+      'salary_amount': _salaryAmountValue(),
+      'salary': _salaryAmountValue().toString(),
+      'phone_whatsapp': _phoneController.text.trim(),
+      'contact_person': _contactPersonController.text.trim(),
+      'instagram': _instagramController.text.trim(),
       'address': _addressController.text.trim(),
       'address_text': _addressController.text.trim(),
       'latitude': resolvedLocation.latitude,
@@ -328,7 +340,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
     final workingPayload = Map<String, dynamic>.from(payload);
     Object? lastError;
 
-    for (var attempt = 0; attempt < 8; attempt++) {
+    for (var attempt = 0; attempt < 14; attempt++) {
       try {
         final result = await jobs.insert(workingPayload).select();
         return List<Map<String, dynamic>>.from(result);

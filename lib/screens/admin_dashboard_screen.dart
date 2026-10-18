@@ -204,6 +204,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   String _jobDistrict(Map<String, dynamic> job) => _jobText(job, 'district', '—');
 
+  num? _jobSalaryValue(Map<String, dynamic> job) {
+    for (final key in const ['salary_amount', 'salary']) {
+      final raw = job[key];
+      if (raw == null) continue;
+      if (raw is num) return raw;
+      final parsed = double.tryParse(
+        raw.toString().replaceAll(RegExp(r'[^0-9,\.]'), '').replaceAll(',', '.'),
+      );
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  String _jobSalaryLabel(Map<String, dynamic> job) {
+    final value = _jobSalaryValue(job);
+    if (value == null || value <= 0) return 'Razılaşma ilə';
+    return '${value == value.roundToDouble() ? value.toInt() : value} ₼';
+  }
+
   String _jobAdStatus(Map<String, dynamic> job) {
     return _jobText(job, 'ad_status', _jobText(job, 'status', 'pending_payment')).toLowerCase();
   }
@@ -324,12 +343,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     try {
       await _client.from('jobs').update(payload).eq('id', jobId);
     } catch (error) {
-      if (fallbackPayload == null) rethrow;
+      // Retry without columns that don't exist in this schema (PGRST204).
+      final working = Map<String, dynamic>.from(payload);
+      Object lastError = error;
+      for (var attempt = 0; attempt < 10; attempt++) {
+        final match = RegExp(r"could not find the '([^']+)' column", caseSensitive: false)
+            .firstMatch(lastError.toString());
+        final missing = match?.group(1);
+        if (missing == null || !working.containsKey(missing)) break;
+        working.remove(missing);
+        if (working.isEmpty) return;
+        try {
+          await _client.from('jobs').update(working).eq('id', jobId);
+          return;
+        } catch (retryError) {
+          lastError = retryError;
+        }
+      }
 
-      final needsFallback = error.toString().toLowerCase().contains('pgrst204') ||
-          error.toString().toLowerCase().contains('has_vacancy') ||
-          error.toString().toLowerCase().contains('is_vacancy');
-      if (!needsFallback) rethrow;
+      if (fallbackPayload == null) throw lastError;
+
+      final needsFallback = lastError.toString().toLowerCase().contains('pgrst204') ||
+          lastError.toString().toLowerCase().contains('has_vacancy') ||
+          lastError.toString().toLowerCase().contains('is_vacancy');
+      if (!needsFallback) throw lastError;
 
       await _client.from('jobs').update(fallbackPayload).eq('id', jobId);
     }
@@ -456,6 +493,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final phoneController = TextEditingController(text: _jobText(job, 'phone_whatsapp', ''));
     final instagramController = TextEditingController(text: _jobText(job, 'instagram', ''));
     final contactController = TextEditingController(text: _jobText(job, 'contact_person', ''));
+    final existingSalary = _jobSalaryValue(job);
+    final salaryController = TextEditingController(
+      text: existingSalary == null || existingSalary <= 0
+          ? ''
+          : '${existingSalary == existingSalary.roundToDouble() ? existingSalary.toInt() : existingSalary}',
+    );
     final formKey = GlobalKey<FormState>();
     String adStatus = _jobAdStatus(job);
     bool hasVacancy = _jobHasVacancy(job);
@@ -513,6 +556,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(height: 12),
                           _sheetField(districtController, 'Rayon'),
                           const SizedBox(height: 12),
+                          TextFormField(
+                            controller: salaryController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: const TextStyle(color: Colors.white),
+                            decoration: _sheetDecoration('Maaş (AZN) — boş = Razılaşma ilə'),
+                            validator: (value) {
+                              final text = value?.trim() ?? '';
+                              if (text.isEmpty) return null;
+                              final parsed = double.tryParse(text.replaceAll(',', '.'));
+                              return parsed == null || parsed < 0 ? 'Düzgün maaş daxil edin' : null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
                           _sheetField(addressController, 'Ünvan'),
                           const SizedBox(height: 12),
                           TextFormField(
@@ -565,7 +621,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   : () async {
                                       final navigator = Navigator.of(sheetContext);
                                       if (!formKey.currentState!.validate()) return;
+                                      final salaryText = salaryController.text.trim().replaceAll(',', '.');
+                                      final salaryParsed = salaryText.isEmpty ? 0.0 : double.parse(salaryText);
+                                      final salaryNum = salaryParsed == salaryParsed.roundToDouble()
+                                          ? salaryParsed.toInt()
+                                          : salaryParsed;
                                       await _updateJob(jobId, {
+                                        'salary_amount': salaryNum,
+                                        'salary': salaryNum.toString(),
                                         'business_name': businessController.text.trim(),
                                         'company_name': businessController.text.trim(),
                                         'category': categoryController.text.trim(),
@@ -778,6 +841,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           DataColumn(label: Text('Business Name')),
           DataColumn(label: Text('Category')),
           DataColumn(label: Text('District')),
+          DataColumn(label: Text('Salary')),
           DataColumn(label: Text('Ad Status')),
           DataColumn(label: Text('Has Vacancy')),
           DataColumn(label: Text('Actions')),
@@ -791,6 +855,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               DataCell(Text(_jobBusinessName(job), style: const TextStyle(color: Color(0xDEFFFFFF), fontWeight: FontWeight.w600))),
               DataCell(Text(_jobCategory(job), style: const TextStyle(color: Color(0xDEFFFFFF), fontWeight: FontWeight.w600))),
               DataCell(Text(_jobDistrict(job), style: const TextStyle(color: Color(0xDEFFFFFF), fontWeight: FontWeight.w600))),
+              DataCell(Text(_jobSalaryLabel(job), style: const TextStyle(color: Color(0xDEFFFFFF), fontWeight: FontWeight.w600))),
               DataCell(_StatusChip(label: _statusLabel(status), color: _statusColor(status))),
               DataCell(
                 Switch.adaptive(
@@ -881,6 +946,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         Text(_jobBusinessName(job), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 4),
                         Text('${_jobCategory(job)} • ${_jobDistrict(job)}', style: const TextStyle(color: _muted, fontSize: 12.5)),
+                        const SizedBox(height: 4),
+                        Text('💰 ${_jobSalaryLabel(job)}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
