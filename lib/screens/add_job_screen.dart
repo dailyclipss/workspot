@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/app_language.dart';
+import '../services/geocoding_service.dart';
 import '../services/job_location_resolver.dart';
 import 'job_payment_screen.dart';
 
@@ -79,6 +81,11 @@ class _AddJobScreenState extends State<AddJobScreen> {
   bool _hasExplicitLocation = false;
   LatLng _selectedLocation = _defaultLocation;
   String _selectedDistrictPreview = 'Nərimanov';
+  Timer? _searchDebounce;
+  List<AddressSuggestion> _suggestions = const [];
+  bool _isSearchingAddress = false;
+  bool _suppressAddressSearch = false;
+  int _geocodeRequestId = 0;
 
   @override
   void initState() {
@@ -92,6 +99,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     appLang.removeListener(_onLanguageChanged);
     _businessNameController.dispose();
     _titleController.dispose();
@@ -114,17 +122,90 @@ class _AddJobScreenState extends State<AddJobScreen> {
       _selectedDistrictPreview = _districtFromLocation(point);
       _selectedDistrict ??= _selectedDistrictPreview;
       _hasExplicitLocation = true;
+      _suggestions = const [];
     });
     _mapController?.animateCamera(gmaps.CameraUpdate.newLatLng(point));
+    _reverseGeocode(point);
   }
 
   void _onMapDragEnd(LatLng point) {
     setState(() {
       _selectedLocation = point;
       _selectedDistrictPreview = _districtFromLocation(point);
-      _selectedDistrict = _selectedDistrictPreview;
+      _selectedDistrict = _districts.contains(_selectedDistrictPreview) ? _selectedDistrictPreview : _selectedDistrict;
       _hasExplicitLocation = true;
+      _suggestions = const [];
     });
+    _reverseGeocode(point);
+  }
+
+  String? _matchDistrict(String? name) {
+    if (name == null) return null;
+    final lower = name.toLowerCase();
+    for (final district in _districts) {
+      final d = district.toLowerCase();
+      if (lower.contains(d) || d.contains(lower)) return district;
+    }
+    return null;
+  }
+
+  Future<void> _reverseGeocode(LatLng point) async {
+    final requestId = ++_geocodeRequestId;
+    final result = await GeocodingService.reverse(
+      point.latitude,
+      point.longitude,
+      lang: appLang.currentLanguage,
+    );
+    if (!mounted || requestId != _geocodeRequestId || result == null) return;
+    _suppressAddressSearch = true;
+    _addressController.text = result.displayName;
+    _suppressAddressSearch = false;
+    final matched = _matchDistrict(result.district);
+    if (matched != null) {
+      setState(() {
+        _selectedDistrict = matched;
+        _selectedDistrictPreview = matched;
+      });
+    }
+  }
+
+  void _onAddressChanged(String value) {
+    if (_suppressAddressSearch) return;
+    _searchDebounce?.cancel();
+    if (value.trim().length < 3) {
+      setState(() {
+        _suggestions = const [];
+        _isSearchingAddress = false;
+      });
+      return;
+    }
+    setState(() => _isSearchingAddress = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () async {
+      final results = await GeocodingService.search(value, lang: appLang.currentLanguage);
+      if (!mounted || _addressController.text != value) return;
+      setState(() {
+        _suggestions = results;
+        _isSearchingAddress = false;
+      });
+    });
+  }
+
+  void _selectSuggestion(AddressSuggestion suggestion) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final point = LatLng(suggestion.latitude, suggestion.longitude);
+    _geocodeRequestId++;
+    _suppressAddressSearch = true;
+    _addressController.text = suggestion.displayName;
+    _suppressAddressSearch = false;
+    final matched = _matchDistrict(suggestion.district);
+    setState(() {
+      _selectedLocation = point;
+      _selectedDistrictPreview = matched ?? _districtFromLocation(point);
+      _selectedDistrict = matched ?? _selectedDistrict;
+      _hasExplicitLocation = true;
+      _suggestions = const [];
+    });
+    _mapController?.animateCamera(gmaps.CameraUpdate.newLatLngZoom(point, 16.5));
   }
 
   String _districtFromLocation(LatLng point) {
@@ -200,6 +281,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
       'category': _selectedCategory ?? 'Xidmət',
       'district': districtValue,
       'description': _descriptionController.text.trim(),
+      'address': _addressController.text.trim(),
+      'address_text': _addressController.text.trim(),
       'latitude': resolvedLocation.latitude,
       'longitude': resolvedLocation.longitude,
       'has_vacancy': _hasVacancy,
@@ -388,13 +471,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    controller: _addressController,
-                    maxLines: 2,
-                    decoration: _fieldDecoration('Ünvan', 'Tam ünvan / yaxınlıq', Icons.place_rounded),
-                    validator: (value) => _requiredValidator(value, 'Ünvanı daxil edin'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
                     controller: _descriptionController,
                     maxLines: 5,
                     minLines: 3,
@@ -500,6 +576,54 @@ class _AddJobScreenState extends State<AddJobScreen> {
                 title: 'Məkan Seçimi',
                 icon: Icons.map_rounded,
                 children: [
+                  TextFormField(
+                    controller: _addressController,
+                    maxLines: 2,
+                    minLines: 1,
+                    onChanged: _onAddressChanged,
+                    decoration: _fieldDecoration('Ünvan axtar', 'Obyektin adı və ya ünvanı yazın', Icons.search_rounded).copyWith(
+                      suffixIcon: _isSearchingAddress
+                          ? const Padding(
+                              padding: EdgeInsets.all(14),
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
+                    ),
+                    validator: (value) => _requiredValidator(value, 'Ünvanı daxil edin'),
+                  ),
+                  if (_suggestions.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          for (final suggestion in _suggestions)
+                            ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.place_outlined, color: Color(0xFF2563EB)),
+                              title: Text(
+                                suggestion.displayName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13.5),
+                              ),
+                              onTap: () => _selectSuggestion(suggestion),
+                            ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
                   Container(
                     height: 240,
                     decoration: BoxDecoration(
