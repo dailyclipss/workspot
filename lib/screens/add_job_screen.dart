@@ -235,13 +235,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
         ),
       };
 
-  String _salaryDisplayValue() {
-    if (_salaryByAgreement) return 'Razılaşma ilə';
-    final value = _salaryController.text.trim();
-    if (value.isEmpty) return '';
-    return value.contains('₼') ? value : '$value ₼';
-  }
-
   String? _requiredValidator(String? value, String message) {
     if (value == null || value.trim().isEmpty) return message;
     return null;
