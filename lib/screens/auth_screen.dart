@@ -9,6 +9,7 @@ import '../services/app_language.dart';
 import '../services/theme_service.dart';
 import '../services/whatsapp_auth_service.dart';
 import '../widgets/legal_footer.dart';
+import '../widgets/online_users_badge.dart';
 import 'home_map_screen.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -718,6 +719,11 @@ class _AuthScreenState extends State<AuthScreen>
                         ),
                       ),
                     ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 16,
+                    child: const OnlineUsersBadge(),
                   ),
                   Positioned(
                     top: 8,
