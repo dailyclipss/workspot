@@ -11,6 +11,9 @@ const LISTING_PACKAGES: Record<string, number> = {
   premium_listing: 20,
 };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -22,10 +25,14 @@ serve(async (req) => {
       description,
       orderId,
       package_id: packageId,
-      target_id: targetId,
+      target_id: bodyTargetId,
+      job_id: bodyJobId,
       target_type: targetType,
       user_id: bodyUserId,
     } = await req.json();
+
+    let targetId: string | undefined = bodyTargetId ?? bodyJobId;
+    const rawTargetId: string | undefined = targetId;
 
     const publicKey = Deno.env.get('EPOINT_PUBLIC_KEY');
     const privateKey = Deno.env.get('EPOINT_PRIVATE_KEY');
@@ -64,20 +71,76 @@ serve(async (req) => {
     }
 
     if (listingAmount !== undefined) {
-      if (!userId || targetType !== 'job' || !targetId) {
+      if (!userId || targetType !== 'job' || !rawTargetId) {
         return new Response(JSON.stringify({ error: 'invalid listing payment request' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      // 'job_<timestamp>' sifariş identifikatorudur; real elan id-sini sifarişdən və ya payment_reference-dən tapırıq
+      if (!UUID_PATTERN.test(rawTargetId)) {
+        const cleanRef = rawTargetId.replace(/^job_/, '');
+        const refCandidates = [rawTargetId, `job_${cleanRef}`];
+        let resolved: string | null = null;
+
+        const { data: orderRow } = await supabase
+          .from('orders')
+          .select('target_id')
+          .in('order_id', refCandidates)
+          .maybeSingle();
+        if (orderRow?.target_id && UUID_PATTERN.test(orderRow.target_id)) {
+          resolved = orderRow.target_id;
+        }
+
+        if (!resolved) {
+          const { data: refJob } = await supabase
+            .from('jobs')
+            .select('id')
+            .in('payment_reference', refCandidates)
+            .maybeSingle();
+          if (refJob?.id) resolved = String(refJob.id);
+        }
+
+        if (!resolved) {
+          return new Response(JSON.stringify({ error: 'job not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        targetId = resolved;
+      }
+
+      // Service-role client RLS-i keçir; sahiblik yoxlaması aşağıda əl ilə aparılır
       const { data: job } = await supabase
         .from('jobs')
-        .select('id')
+        .select('*')
         .eq('id', targetId)
-        .eq('owner_id', userId)
         .maybeSingle();
       if (!job) {
-        return new Response(JSON.stringify({ error: 'job not found for this user' }), {
+        return new Response(JSON.stringify({ error: 'job not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // owner_id / created_by / user_id sütunlarından hansı doludursa, biri istifadəçiyə uyğun olmalıdır
+      const owners = ['owner_id', 'created_by', 'user_id']
+        .map((key) => (job as Record<string, unknown>)[key])
+        .filter((value) => value !== null && value !== undefined && value !== '');
+      if (owners.length > 0 && !owners.includes(userId)) {
+        return new Response(JSON.stringify({ error: 'job does not belong to this user' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const jobStatus = String(
+        (job as Record<string, unknown>).ad_status ??
+          (job as Record<string, unknown>).status ?? '',
+      ).toLowerCase();
+      if (owners.length === 0 && jobStatus !== 'pending_payment') {
+        return new Response(JSON.stringify({ error: 'job ownership could not be verified' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
