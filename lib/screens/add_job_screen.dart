@@ -242,19 +242,19 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
   String? _phoneValidator(String? value) {
     final digits = value?.replaceAll(RegExp(r'\D'), '') ?? '';
-    if (digits.isEmpty) return 'Telefon / WhatsApp nömrəsini daxil edin';
-    if (digits.length < 9) return 'Düzgün telefon nömrəsi daxil edin';
+    if (digits.isEmpty) return appLang.translate('aj_phone_req');
+    if (digits.length < 9) return appLang.translate('aj_phone_invalid');
     return null;
   }
 
   String? _salaryValidator(String? value) {
     if (_salaryByAgreement) return null;
     if (value == null || value.trim().isEmpty) {
-      return 'Maaşı daxil edin və ya "Razılaşma ilə" seçin';
+      return appLang.translate('aj_salary_req');
     }
     final numeric = value.replaceAll(RegExp(r'[^0-9,\.]'), '');
     if (double.tryParse(numeric.replaceAll(',', '.')) == null) {
-      return 'Düzgün maaş daxil edin';
+      return appLang.translate('aj_salary_invalid');
     }
     return null;
   }
@@ -364,7 +364,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   Future<void> _submitJob() async {
     if (_selectedCategory == null || _selectedDistrict == null || _selectedSchedule == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Zəhmət olmasa bütün seçimləri tamamlayın.')),
+        SnackBar(content: Text(appLang.translate('aj_complete_all'))),
       );
       return;
     }
@@ -394,7 +394,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
       final errorMessage = error.toString().trim().isEmpty ? _extractInsertErrorMessage(error) : error.toString();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Xəta: $errorMessage')),
+        SnackBar(content: Text('${appLang.translate('aj_error_prefix')}: $errorMessage')),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -422,49 +422,47 @@ class _AddJobScreenState extends State<AddJobScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _sectionCard(
-                title: 'Biznes Məlumatları',
+                title: appLang.translate('aj_business_info'),
                 icon: Icons.business_rounded,
                 children: [
                   TextFormField(
                     controller: _businessNameController,
-                    decoration: _fieldDecoration('Biznes adı', 'Məs: Coffee Moffie', Icons.storefront_rounded),
-                    validator: (value) => _requiredValidator(value, 'Biznes adını daxil edin'),
+                    decoration: _fieldDecoration(appLang.translate('aj_business_name'), appLang.translate('aj_business_name_hint'), Icons.storefront_rounded),
+                    validator: (value) => _requiredValidator(value, appLang.translate('aj_business_name_req')),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _titleController,
-                    decoration: _fieldDecoration('Vakansiya adı', 'Məs: Barista / Kassir', Icons.badge_rounded),
-                    validator: (value) => _requiredValidator(value, 'Vakansiya adını daxil edin'),
+                    decoration: _fieldDecoration(appLang.translate('aj_title_label'), appLang.translate('aj_title_hint'), Icons.badge_rounded),
+                    validator: (value) => _requiredValidator(value, appLang.translate('aj_title_req')),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedCategory,
-                    decoration: _fieldDecoration('Kateqoriya', 'Məs: Restoran & Kafe', Icons.category_rounded),
-                    items: _categories
-                        .map(
-                          (category) => DropdownMenuItem<String>(
-                            value: category.label,
-                            child: Text(category.label),
-                          ),
-                        )
-                        .toList(),
+                    decoration: _fieldDecoration(appLang.translate('aj_category'), appLang.translate('aj_category_hint'), Icons.category_rounded),
+                    items: [
+                      for (var i = 0; i < _categories.length; i++)
+                        DropdownMenuItem<String>(
+                          value: _categories[i].label,
+                          child: Text(appLang.translate('aj_cat_$i')),
+                        ),
+                    ],
                     onChanged: (value) => setState(() => _selectedCategory = value),
-                    validator: (value) => _requiredValidator(value, 'Kateqoriya seçin'),
+                    validator: (value) => _requiredValidator(value, appLang.translate('aj_category_req')),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedDistrict,
-                    decoration: _fieldDecoration('Rayon', 'Məs: Nərimanov', Icons.location_city_rounded),
-                    items: _districts
-                        .map(
-                          (district) => DropdownMenuItem<String>(
-                            value: district,
-                            child: Text(district),
-                          ),
-                        )
-                        .toList(),
+                    decoration: _fieldDecoration(appLang.translate('aj_district'), appLang.translate('aj_district_hint'), Icons.location_city_rounded),
+                    items: [
+                      for (var i = 0; i < _districts.length; i++)
+                        DropdownMenuItem<String>(
+                          value: _districts[i],
+                          child: Text(appLang.translate('aj_dist_$i')),
+                        ),
+                    ],
                     onChanged: (value) => setState(() => _selectedDistrict = value),
-                    validator: (value) => _requiredValidator(value, 'Rayon seçin'),
+                    validator: (value) => _requiredValidator(value, appLang.translate('aj_district_req')),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -473,13 +471,13 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     minLines: 3,
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
-                    decoration: _fieldDecoration('Description / Job Details', 'İşin təsviri / Tələblər', Icons.description_outlined),
+                    decoration: _fieldDecoration(appLang.translate('aj_description'), appLang.translate('aj_description_hint'), Icons.description_outlined),
                   ),
                 ],
               ),
               const SizedBox(height: 14),
               _sectionCard(
-                title: 'Əlaqə & Sosial Şəbəkə',
+                title: appLang.translate('aj_contact_section'),
                 icon: Icons.call_rounded,
                 children: [
                   TextFormField(
@@ -489,24 +487,24 @@ class _AddJobScreenState extends State<AddJobScreen> {
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s\-()]')),
                       _AzerbaijanPhoneFormatter(),
                     ],
-                    decoration: _fieldDecoration('Telefon / WhatsApp', '+994 XX XXX XX XX', Icons.phone_rounded),
+                    decoration: _fieldDecoration(appLang.translate('aj_phone'), '+994 XX XXX XX XX', Icons.phone_rounded),
                     validator: _phoneValidator,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _contactPersonController,
-                    decoration: _fieldDecoration('Kontakt şəxsi', 'Məs: Əli m.', Icons.person_rounded),
+                    decoration: _fieldDecoration(appLang.translate('aj_contact_person'), appLang.translate('aj_contact_person_hint'), Icons.person_rounded),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _instagramController,
-                    decoration: _fieldDecoration('Instagram', 'Username / Link', Icons.camera_alt_rounded),
+                    decoration: _fieldDecoration('Instagram', appLang.translate('aj_instagram_hint'), Icons.camera_alt_rounded),
                   ),
                 ],
               ),
               const SizedBox(height: 14),
               _sectionCard(
-                title: 'Vakansiya Şərtləri',
+                title: appLang.translate('aj_terms_section'),
                 icon: Icons.badge_rounded,
                 children: [
                   Row(
@@ -516,7 +514,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                           controller: _salaryController,
                           enabled: !_salaryByAgreement,
                           keyboardType: TextInputType.number,
-                          decoration: _fieldDecoration('Maaş (AZN)', 'Məs: 850', Icons.attach_money_rounded),
+                          decoration: _fieldDecoration(appLang.translate('aj_salary'), appLang.translate('aj_salary_hint'), Icons.attach_money_rounded),
                           validator: _salaryValidator,
                         ),
                       ),
@@ -526,7 +524,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                         child: CheckboxListTile(
                           value: _salaryByAgreement,
                           onChanged: (value) => setState(() => _salaryByAgreement = value ?? false),
-                          title: const Text('Razılaşma ilə', style: TextStyle(fontSize: 12.5)),
+                          title: Text(appLang.translate('aj_salary_agreement'), style: const TextStyle(fontSize: 12.5)),
                           controlAffinity: ListTileControlAffinity.leading,
                           contentPadding: EdgeInsets.zero,
                           dense: true,
@@ -537,31 +535,30 @@ class _AddJobScreenState extends State<AddJobScreen> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedSchedule,
-                    decoration: _fieldDecoration('Qrafik', 'İş qrafiki', Icons.schedule_rounded),
-                    items: _schedules
-                        .map(
-                          (schedule) => DropdownMenuItem<String>(
-                            value: schedule,
-                            child: Text(schedule),
-                          ),
-                        )
-                        .toList(),
+                    decoration: _fieldDecoration(appLang.translate('aj_schedule'), appLang.translate('aj_schedule_hint'), Icons.schedule_rounded),
+                    items: [
+                      for (var i = 0; i < _schedules.length; i++)
+                        DropdownMenuItem<String>(
+                          value: _schedules[i],
+                          child: Text(appLang.translate('aj_sch_$i')),
+                        ),
+                    ],
                     onChanged: (value) => setState(() => _selectedSchedule = value),
-                    validator: (value) => _requiredValidator(value, 'Qrafiki seçin'),
+                    validator: (value) => _requiredValidator(value, appLang.translate('aj_schedule_req')),
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Vakansiya Var?', style: TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Aktiv elan kimi göstərilsin'),
+                    title: Text(appLang.translate('aj_has_vacancy'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(appLang.translate('aj_has_vacancy_sub')),
                     value: _hasVacancy,
                     onChanged: (value) => setState(() => _hasVacancy = value),
                   ),
                   const Divider(height: 16),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('VIP Elan', style: TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Daha ön planda görünəcək'),
+                    title: Text(appLang.translate('aj_vip'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(appLang.translate('aj_vip_sub')),
                     activeColor: Colors.amber.shade700,
                     value: _isVip,
                     onChanged: (value) => setState(() => _isVip = value),
@@ -662,8 +659,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
                           height: 20,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
                         )
-                      : const Text(
-                          'Ödənişə Keç və Dərc Et',
+                      : Text(
+                          appLang.translate('aj_submit'),
                           style: TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w700),
                         ),
                 ),

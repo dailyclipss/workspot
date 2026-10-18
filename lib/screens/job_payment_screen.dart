@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/app_language.dart';
 import '../services/payment_service.dart';
 
 class JobPaymentScreen extends StatefulWidget {
@@ -101,8 +102,14 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
 
   String _newOrderId() => 'job_${DateTime.now().millisecondsSinceEpoch}';
 
+  String _pkgTitle(_ListingPackage p) =>
+      appLang.translate(p.isPremium ? 'pj_premium' : 'pj_standard');
+
+  String _pkgDesc(_ListingPackage p) =>
+      appLang.translate(p.isPremium ? 'pj_premium_desc' : 'pj_standard_desc');
+
   String get _description =>
-      '${_selectedPackage.title} - ${widget.jobDraft['title'] ?? 'Job listing'}';
+      '${_pkgTitle(_selectedPackage)} - ${widget.jobDraft['title'] ?? appLang.translate('pj_default_title')}';
 
   void _showError(String message) {
     if (!mounted) return;
@@ -129,7 +136,7 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
 
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null || !PaymentService.isValidUuid(userId)) {
-      _showError('Elanı yayımlamaq üçün hesabınıza daxil olun.');
+      _showError(appLang.translate('pj_login_required'));
       return;
     }
 
@@ -141,7 +148,7 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
     try {
       final jobId = await _ensureJobCreated(userId);
       if (jobId == null || !PaymentService.isValidUuid(jobId)) {
-        _showError('Elan yaradıla bilmədi. Yenidən cəhd edin.');
+        _showError(appLang.translate('pj_create_failed'));
         return;
       }
 
@@ -160,7 +167,7 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
       if (mounted) setState(() => _awaitingPayment = true);
       _startStatusPolling(jobId);
     } catch (error) {
-      _showError('Ödəniş başladıla bilmədi: $error');
+      _showError('${appLang.translate('pj_start_failed')}: $error');
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -185,10 +192,10 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
       if (status == 'active' || status == 'approved' || status == 'vip') {
         await _onPaymentConfirmed();
       } else if (manual) {
-        _showError('Ödəniş hələ təsdiqlənməyib.');
+        _showError(appLang.translate('pj_not_confirmed'));
       }
     } catch (_) {
-      if (manual) _showError('Ödəniş statusu yoxlanıla bilmədi.');
+      if (manual) _showError(appLang.translate('pj_status_failed'));
     }
   }
 
@@ -203,18 +210,18 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: _surface,
-        title: const Text(
-          'Ödəniş uğurlu oldu',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        title: Text(
+          appLang.translate('pj_success'),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
-        content: const Text(
-          'Vakansiyanız uğurla dərc olundu.',
-          style: TextStyle(color: _muted),
+        content: Text(
+          appLang.translate('pj_success_sub'),
+          style: const TextStyle(color: _muted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Davam et'),
+            child: Text(appLang.translate('pj_continue')),
           ),
         ],
       ),
@@ -231,9 +238,9 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
         backgroundColor: _background,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Job Checkout',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          appLang.translate('pj_checkout'),
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       body: SafeArea(
@@ -278,9 +285,9 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
                   color: Colors.white,
                 ),
               )
-            : const Text(
-                'Epoint ilə Ödəniş Et',
-                style: TextStyle(
+            : Text(
+                appLang.translate('pj_pay'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
                 ),
@@ -300,25 +307,25 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Ödəniş gözlənilir',
-            style: TextStyle(
+          Text(
+            appLang.translate('pj_waiting'),
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Epoint ödəniş səhifəsində ödənişi tamamlayın. Təsdiqdən sonra elan avtomatik dərc olunacaq.',
-            style: TextStyle(color: _muted, height: 1.4),
+          Text(
+            appLang.translate('pj_waiting_sub'),
+            style: const TextStyle(color: _muted, height: 1.4),
           ),
           const SizedBox(height: 10),
           TextButton(
             onPressed: _jobId == null
                 ? null
                 : () => _checkPaymentStatus(_jobId!, manual: true),
-            child: const Text('Ödənişi yoxla'),
+            child: Text(appLang.translate('pj_check')),
           ),
         ],
       ),
@@ -329,15 +336,15 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Listing options',
-          style: TextStyle(
+        Text(
+          appLang.translate('pj_options'),
+          style: const TextStyle(
               color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Choose the package before completing the Epoint payment flow.',
-          style: TextStyle(color: _muted, height: 1.4),
+        Text(
+          appLang.translate('pj_options_sub'),
+          style: const TextStyle(color: _muted, height: 1.4),
         ),
         const SizedBox(height: 12),
         Row(
@@ -391,7 +398,7 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          option.title,
+                          _pkgTitle(option),
                           style: const TextStyle(
                               color: Colors.white, fontWeight: FontWeight.w700),
                         ),
@@ -405,7 +412,7 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          option.description,
+                          _pkgDesc(option),
                           style: const TextStyle(
                               color: _muted, fontSize: 12.5, height: 1.35),
                         ),
@@ -433,15 +440,15 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Epoint payload preview',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          Text(
+            appLang.translate('pj_summary'),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
-          _payloadRow('amount', _selectedPackage.amount.toStringAsFixed(2)),
-          _payloadRow('currency', 'AZN'),
-          _payloadRow('order_id', _orderId),
-          _payloadRow('description', _description),
+          _payloadRow(appLang.translate('pj_amount'), _selectedPackage.amount.toStringAsFixed(2)),
+          _payloadRow(appLang.translate('pj_currency'), 'AZN'),
+          _payloadRow(appLang.translate('pj_order_id'), _orderId),
+          _payloadRow(appLang.translate('pj_description'), _description),
         ],
       ),
     );
