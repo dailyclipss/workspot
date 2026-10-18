@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/app_language.dart';
 import '../services/geocoding_service.dart';
 import '../services/job_location_resolver.dart';
+import '../widgets/location_pin_marker.dart';
 import 'job_payment_screen.dart';
 
 typedef LatLng = gmaps.LatLng;
@@ -86,10 +87,14 @@ class _AddJobScreenState extends State<AddJobScreen> {
   bool _isSearchingAddress = false;
   bool _suppressAddressSearch = false;
   int _geocodeRequestId = 0;
+  gmaps.BitmapDescriptor? _pinIcon;
 
   @override
   void initState() {
     super.initState();
+    LocationPinMarker.create().then((icon) {
+      if (mounted && icon != null) setState(() => _pinIcon = icon);
+    });
     appLang.addListener(_onLanguageChanged);
     _selectedCategory = _categories.first.label;
     _selectedDistrict = _districts.first;
@@ -225,7 +230,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
           position: _selectedLocation,
           draggable: true,
           onDragEnd: _onMapDragEnd,
-          anchor: const Offset(0.5, 1.0),
+          icon: _pinIcon ?? gmaps.BitmapDescriptor.defaultMarker,
+          anchor: const Offset(0.5, 0.89),
         ),
       };
 
