@@ -317,6 +317,7 @@ class _AuthScreenState extends State<AuthScreen>
         'hasSession: ${data.session != null}',
       );
       if (data.event == AuthChangeEvent.signedIn && data.session != null) {
+        unawaited(appLang.syncToAccount());
         _openHomeAfterAuthentication();
       }
     });

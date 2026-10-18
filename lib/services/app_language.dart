@@ -1,14 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AppLanguage extends ChangeNotifier {
+  static const String _prefKey = 'app_language';
+  static const Set<String> supported = {'az', 'ru', 'en'};
+
   String _currentLanguage = 'az';
 
   String get currentLanguage => _currentLanguage;
+
+  /// Restores the language the user picked on this device (survives the
+  /// full-page reload caused by the Google OAuth redirect on web).
+  Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_prefKey);
+      if (saved != null && supported.contains(saved) && saved != _currentLanguage) {
+        _currentLanguage = saved;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('AppLanguage.load failed: $e');
+    }
+  }
 
   void changeLanguage(String langCode) {
     if (_currentLanguage != langCode) {
       _currentLanguage = langCode;
       notifyListeners();
+    }
+    _persist(langCode);
+  }
+
+  Future<void> _persist(String langCode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefKey, langCode);
+    } catch (e) {
+      debugPrint('AppLanguage persist failed: $e');
+    }
+    await syncToAccount();
+  }
+
+  /// Saves the active app language on the signed-in account. The device
+  /// language always wins; the account value is only written, never applied.
+  Future<void> syncToAccount() async {
+    try {
+      final auth = Supabase.instance.client.auth;
+      final user = auth.currentUser;
+      if (user == null) return;
+      if (user.userMetadata?['language'] == _currentLanguage) return;
+      await auth.updateUser(UserAttributes(data: {'language': _currentLanguage}));
+    } catch (e) {
+      debugPrint('AppLanguage.syncToAccount failed: $e');
     }
   }
 

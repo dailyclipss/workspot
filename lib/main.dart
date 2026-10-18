@@ -30,6 +30,7 @@ void main() async {
     ),
   );
 
+  await appLang.load();
   runApp(const MyApp());
   try {
     PresenceService.instance.start();
