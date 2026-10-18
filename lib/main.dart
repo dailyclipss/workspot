@@ -5,6 +5,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/theme_service.dart';
 import 'services/app_language.dart';
+import 'services/presence_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/admin_login_screen.dart';
@@ -30,6 +31,7 @@ void main() async {
   );
 
   runApp(const MyApp());
+  PresenceService.instance.start();
 }
 
 class MyApp extends StatelessWidget {

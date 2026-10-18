@@ -25,6 +25,7 @@ import 'payment_checkout_screen.dart';
 import 'profile_screen.dart';
 import '../services/payment_service.dart';
 import '../utils/contact_utils.dart';
+import '../widgets/online_users_badge.dart';
 
 class _CategoryMeta {
   final Color color;
@@ -1445,6 +1446,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 child: SafeArea(
                   child: Column(
                     children: [
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: OnlineUsersBadge(),
+                        ),
+                      ),
                       _buildSearchBar(isDark),
                       if (_isFilterOpen) _buildFilterPanel(isDark),
                       _buildCategoryList(isDark),

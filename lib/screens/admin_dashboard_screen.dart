@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../admin/admin_approval_screen.dart';
 import '../services/admin_auth_service.dart';
 import '../services/notification_service.dart';
+import '../services/presence_service.dart';
+import '../widgets/online_users_badge.dart';
 import '../services/job_location_resolver.dart';
 import 'auth_screen.dart';
 import 'home_map_screen.dart';
@@ -678,6 +680,49 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  Widget _buildLiveMonitoringCard() {
+    return ValueListenableBuilder<int>(
+      valueListenable: PresenceService.instance.onlineCount,
+      builder: (context, count, _) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _good.withValues(alpha: 0.28)),
+            boxShadow: const [
+              BoxShadow(color: Color(0x22000000), blurRadius: 18, offset: Offset(0, 8)),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _good.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Center(child: PulsingDot(size: 10)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Canlı İzləmə', style: TextStyle(color: _muted, fontSize: 12.5)),
+                    const SizedBox(height: 6),
+                    Text('$count online', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildJobsSection() {
     final wide = MediaQuery.of(context).size.width >= 900;
     return Container(
@@ -1099,6 +1144,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               SizedBox(width: metricWidth, child: _buildMetricCard(label: 'Pending Approvals', value: '$_pendingApprovals', icon: Icons.hourglass_top_rounded, accent: _warn)),
               SizedBox(width: metricWidth, child: _buildMetricCard(label: 'VIP Jobs', value: '$_vipJobs', icon: Icons.workspace_premium_rounded, accent: _good)),
               SizedBox(width: metricWidth, child: _buildMetricCard(label: 'Monthly B2B Revenue', value: _formatAmount(_monthlyRevenue), icon: Icons.payments_rounded, accent: _danger)),
+              SizedBox(width: metricWidth, child: _buildLiveMonitoringCard()),
             ],
           ),
           const SizedBox(height: 18),
