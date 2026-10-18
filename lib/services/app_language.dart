@@ -238,6 +238,10 @@ class AppLanguage extends ChangeNotifier {
       'plan_ent_f3': '🎯 Şəxsi menecer və prioritet dəstək',
       'online_users': '{count} online istifadəçi',
       'live_monitoring': 'Canlı İzləmə',
+      'location_section': 'Məkan Seçimi',
+      'address_search_label': 'Ünvan axtar',
+      'address_search_hint': 'Obyektin adı və ya ünvanı yazın',
+      'address_required': 'Ünvanı daxil edin',
     },
     'ru': {
       'app_title': 'WorkSpot',
@@ -463,6 +467,10 @@ class AppLanguage extends ChangeNotifier {
       'plan_ent_f3': '🎯 Личный менеджер и приоритетная поддержка',
       'online_users': '{count} пользователей онлайн',
       'live_monitoring': 'Мониторинг в реальном времени',
+      'location_section': 'Выбор местоположения',
+      'address_search_label': 'Поиск адреса',
+      'address_search_hint': 'Введите название места или адрес',
+      'address_required': 'Введите адрес',
     },
     'en': {
       'app_title': 'WorkSpot',
@@ -686,6 +694,10 @@ class AppLanguage extends ChangeNotifier {
       'plan_ent_f3': '🎯 Dedicated manager & priority support',
       'online_users': '{count} users online',
       'live_monitoring': 'Live Monitoring',
+      'location_section': 'Select Location',
+      'address_search_label': 'Search address',
+      'address_search_hint': 'Type a place name or address',
+      'address_required': 'Please enter the address',
     },
   };
 

@@ -570,7 +570,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
               ),
               const SizedBox(height: 14),
               _sectionCard(
-                title: 'Məkan Seçimi',
+                title: appLang.translate('location_section'),
                 icon: Icons.map_rounded,
                 children: [
                   TextFormField(
@@ -578,7 +578,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     maxLines: 2,
                     minLines: 1,
                     onChanged: _onAddressChanged,
-                    decoration: _fieldDecoration('Ünvan axtar', 'Obyektin adı və ya ünvanı yazın', Icons.search_rounded).copyWith(
+                    decoration: _fieldDecoration(appLang.translate('address_search_label'), appLang.translate('address_search_hint'), Icons.search_rounded).copyWith(
                       suffixIcon: _isSearchingAddress
                           ? const Padding(
                               padding: EdgeInsets.all(14),
@@ -590,7 +590,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                             )
                           : null,
                     ),
-                    validator: (value) => _requiredValidator(value, 'Ünvanı daxil edin'),
+                    validator: (value) => _requiredValidator(value, appLang.translate('address_required')),
                   ),
                   if (_suggestions.isNotEmpty)
                     Container(
