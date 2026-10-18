@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/app_language.dart';
 import '../services/presence_service.dart';
 
 /// Green pulsing dot used by the online-users indicators.
@@ -72,7 +73,9 @@ class OnlineUsersBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return ValueListenableBuilder<int>(
+    return AnimatedBuilder(
+      animation: appLang,
+      builder: (context, _) => ValueListenableBuilder<int>(
       valueListenable: PresenceService.instance.onlineCount,
       builder: (context, count, _) {
         return Container(
@@ -94,7 +97,7 @@ class OnlineUsersBadge extends StatelessWidget {
               const PulsingDot(size: 8),
               const SizedBox(width: 2),
               Text(
-                '$count online istifadəçi',
+                appLang.translateWithArgs('online_users', {'count': '$count'}),
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
@@ -105,6 +108,7 @@ class OnlineUsersBadge extends StatelessWidget {
           ),
         );
       },
+      ),
     );
   }
 }

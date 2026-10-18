@@ -236,6 +236,8 @@ class AppLanguage extends ChangeNotifier {
       'plan_ent_f1': '♾️ Limitsiz vakansiya yerləşdirmə',
       'plan_ent_f2': '🌟 Hər ay 4 Pulsuz VIP Pin hədiyyə',
       'plan_ent_f3': '🎯 Şəxsi menecer və prioritet dəstək',
+      'online_users': '{count} online istifadəçi',
+      'live_monitoring': 'Canlı İzləmə',
     },
     'ru': {
       'app_title': 'WorkSpot',
@@ -459,6 +461,8 @@ class AppLanguage extends ChangeNotifier {
       'plan_ent_f1': '♾️ Безлимитное размещение вакансий',
       'plan_ent_f2': '🌟 4 бесплатные VIP Pin каждый месяц',
       'plan_ent_f3': '🎯 Личный менеджер и приоритетная поддержка',
+      'online_users': '{count} пользователей онлайн',
+      'live_monitoring': 'Мониторинг в реальном времени',
     },
     'en': {
       'app_title': 'WorkSpot',
@@ -680,6 +684,8 @@ class AppLanguage extends ChangeNotifier {
       'plan_ent_f1': '♾️ Unlimited job postings',
       'plan_ent_f2': '🌟 4 Free VIP Pins every month',
       'plan_ent_f3': '🎯 Dedicated manager & priority support',
+      'online_users': '{count} users online',
+      'live_monitoring': 'Live Monitoring',
     },
   };
 

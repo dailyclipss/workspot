@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../admin/admin_approval_screen.dart';
 import '../services/admin_auth_service.dart';
+import '../services/app_language.dart';
 import '../services/notification_service.dart';
 import '../services/presence_service.dart';
 import '../widgets/online_users_badge.dart';
@@ -710,7 +711,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Canlı İzləmə', style: TextStyle(color: _muted, fontSize: 12.5)),
+                    Text(appLang.translate('live_monitoring'), style: const TextStyle(color: _muted, fontSize: 12.5)),
                     const SizedBox(height: 6),
                     Text('$count online', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
                   ],
