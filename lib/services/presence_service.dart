@@ -14,8 +14,17 @@ class PresenceService with WidgetsBindingObserver {
   final ValueNotifier<int> onlineCount = ValueNotifier<int>(0);
 
   // Unique per app instance so every tab/device counts once.
-  final String _clientKey =
-      '${DateTime.now().microsecondsSinceEpoch}-${math.Random().nextInt(1 << 32)}';
+  // Avoids `1 << 32`, which evaluates to 0 on the web (32-bit shifts).
+  final String _clientKey = _generateClientKey();
+
+  static String _generateClientKey() {
+    try {
+      return '${DateTime.now().microsecondsSinceEpoch}-'
+          '${math.Random().nextInt(0x7FFFFFFF)}';
+    } catch (_) {
+      return DateTime.now().microsecondsSinceEpoch.toString();
+    }
+  }
 
   RealtimeChannel? _channel;
   bool _started = false;
@@ -24,9 +33,13 @@ class PresenceService with WidgetsBindingObserver {
 
   void start() {
     if (_started) return;
-    _started = true;
-    WidgetsBinding.instance.addObserver(this);
-    _join();
+    try {
+      _started = true;
+      WidgetsBinding.instance.addObserver(this);
+      _join();
+    } catch (error) {
+      debugPrint('Presence start failed: $error');
+    }
   }
 
   Future<void> stop() async {
@@ -38,25 +51,34 @@ class PresenceService with WidgetsBindingObserver {
 
   void _join() {
     if (_channel != null) return;
-    final channel = _client.channel(
-      channelName,
-      opts: RealtimeChannelConfig(key: _clientKey),
-    );
-    _channel = channel;
+    try {
+      final channel = _client.channel(
+        channelName,
+        opts: RealtimeChannelConfig(key: _clientKey),
+      );
+      _channel = channel;
 
-    channel
-        .onPresenceSync((_) => _updateCount(channel))
-        .onPresenceJoin((_) => _updateCount(channel))
-        .onPresenceLeave((_) => _updateCount(channel))
-        .subscribe((status, error) async {
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        await channel.track({
-          'online_at': DateTime.now().toUtc().toIso8601String(),
-          'user_id': _client.auth.currentUser?.id,
-        });
-        _updateCount(channel);
-      }
-    });
+      channel
+          .onPresenceSync((_) => _updateCount(channel))
+          .onPresenceJoin((_) => _updateCount(channel))
+          .onPresenceLeave((_) => _updateCount(channel))
+          .subscribe((status, error) async {
+        try {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            await channel.track({
+              'online_at': DateTime.now().toUtc().toIso8601String(),
+              'user_id': _client.auth.currentUser?.id,
+            });
+            _updateCount(channel);
+          }
+        } catch (e) {
+          debugPrint('Presence track failed: $e');
+        }
+      });
+    } catch (error) {
+      _channel = null;
+      debugPrint('Presence join failed: $error');
+    }
   }
 
   Future<void> _leave() async {
@@ -73,12 +95,16 @@ class PresenceService with WidgetsBindingObserver {
   }
 
   void _updateCount(RealtimeChannel channel) {
-    if (!identical(channel, _channel)) return;
-    var total = 0;
-    for (final state in channel.presenceState()) {
-      total += state.presences.length;
+    try {
+      if (!identical(channel, _channel)) return;
+      var total = 0;
+      for (final state in channel.presenceState()) {
+        total += state.presences.length;
+      }
+      onlineCount.value = total;
+    } catch (error) {
+      debugPrint('Presence count failed: $error');
     }
-    onlineCount.value = total;
   }
 
   @override

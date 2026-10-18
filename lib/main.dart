@@ -31,7 +31,11 @@ void main() async {
   );
 
   runApp(const MyApp());
-  PresenceService.instance.start();
+  try {
+    PresenceService.instance.start();
+  } catch (error) {
+    debugPrint('Presence unavailable: $error');
+  }
 }
 
 class MyApp extends StatelessWidget {
