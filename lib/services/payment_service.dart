@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -112,6 +113,8 @@ class PaymentService {
     required PaymentPackage package,
     required String targetId,
     required PaymentTargetType targetType,
+    String? orderId,
+    bool sameTabOnWeb = false,
   }) async {
     try {
       final session = _client.auth.currentSession;
@@ -139,6 +142,7 @@ class PaymentService {
               'target_type': targetType.name,
               'user_id': userId,
               'description': appLang.translate(package.nameKey),
+              if (orderId != null) 'orderId': orderId,
             }),
           )
           .timeout(const Duration(seconds: 30));
@@ -161,7 +165,9 @@ class PaymentService {
       final uri = Uri.parse(redirectUrl);
       if (uri.scheme != 'https') return 'Invalid payment page URL.';
 
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final opened = sameTabOnWeb && kIsWeb
+          ? await launchUrl(uri, webOnlyWindowName: '_self')
+          : await launchUrl(uri, mode: LaunchMode.externalApplication);
       return opened ? null : 'Could not open the payment page.';
     } catch (error) {
       return '${appLang.translate('payment_failed_prefix')} $error';

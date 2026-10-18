@@ -6,6 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const LISTING_PACKAGES: Record<string, number> = {
+  standard_listing: 10,
+  premium_listing: 20,
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -39,6 +44,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    // Elan paketlərinin qiyməti serverdə təyin olunur; client məbləği nəzərə alınmır.
+    const listingAmount = LISTING_PACKAGES[packageId ?? ''];
+    const finalAmount = listingAmount ?? amount;
+
     // user_id yalnız tokendən götürülür; body-dəki dəyər tokenlə uyğun olmalıdır
     let userId: string | null = null;
     const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -54,11 +63,32 @@ serve(async (req) => {
       });
     }
 
+    if (listingAmount !== undefined) {
+      if (!userId || targetType !== 'job' || !targetId) {
+        return new Response(JSON.stringify({ error: 'invalid listing payment request' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { data: job } = await supabase
+        .from('jobs')
+        .select('id')
+        .eq('id', targetId)
+        .eq('owner_id', userId)
+        .maybeSingle();
+      if (!job) {
+        return new Response(JSON.stringify({ error: 'job not found for this user' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const { error: insertError } = await supabase.from('orders').insert({
       order_id: finalOrderId,
       user_id: userId,
       status: 'pending',
-      amount: amount ?? null,
+      amount: finalAmount ?? null,
       package_id: packageId ?? null,
       target_id: targetId ?? null,
       target_type: targetType ?? null,
@@ -73,7 +103,7 @@ serve(async (req) => {
 
     const data = {
       public_key: publicKey,
-      amount: amount || "1.00",
+      amount: finalAmount || "1.00",
       currency: "AZN",
       language: "az",
       order_id: finalOrderId,

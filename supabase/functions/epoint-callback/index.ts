@@ -90,6 +90,47 @@ serve(async (req) => {
       if (!updated || updated.length === 0) {
         console.warn('No order updated for', decodedData.order_id);
       }
+
+      if (newStatus === 'paid') {
+        const { data: order } = await supabase
+          .from('orders')
+          .select('order_id, target_id, target_type, package_id')
+          .eq('order_id', decodedData.order_id)
+          .maybeSingle();
+
+        if (order?.target_type === 'job' && order.target_id &&
+            (order.package_id === 'standard_listing' || order.package_id === 'premium_listing')) {
+          const isPremium = order.package_id === 'premium_listing';
+          // Bazada olmayan sütunlar üçün daha sadə payload-lara düşürük
+          const attempts = [
+            {
+              ad_status: 'active',
+              status: 'active',
+              is_active: true,
+              is_vip: isPremium,
+              package_type: isPremium ? 'Premium' : 'Standard',
+              payment_reference: order.order_id,
+            },
+            { ad_status: 'active', is_active: true, is_vip: isPremium },
+            { ad_status: 'active' },
+          ];
+          let activated = false;
+          for (const payload of attempts) {
+            const { error: jobError } = await supabase
+              .from('jobs')
+              .update(payload)
+              .eq('id', order.target_id);
+            if (!jobError) {
+              activated = true;
+              break;
+            }
+            console.error('job activation attempt failed', jobError.message);
+          }
+          if (!activated) {
+            return new Response('Job activation failed', { status: 500 });
+          }
+        }
+      }
     }
 
     return new Response('OK', { status: 200 });

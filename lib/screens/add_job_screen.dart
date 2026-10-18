@@ -297,7 +297,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
             jobDraft: jobData,
             preferPremium: _isVip,
             publishJob: (payload) async {
-              await _insertJobWithFallback(payload);
+              final inserted = await _insertJobWithFallback(payload);
+              return inserted.isEmpty ? null : inserted.first['id']?.toString();
             },
           ),
         ),
