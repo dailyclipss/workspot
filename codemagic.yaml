@@ -26,6 +26,10 @@ workflows:
             --create
           keychain add-certificates
           xcode-project use-profiles
+          echo "--- installed profiles ---"
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" || true
+          echo "--- pbxproj signing settings ---"
+          grep -nE "CODE_SIGN|PROVISIONING|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER" ios/Runner.xcodeproj/project.pbxproj
       - name: Build IPA
         script: |
           flutter build ipa --release \
