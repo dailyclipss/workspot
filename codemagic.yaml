@@ -9,9 +9,6 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: az.workspot.app.sid
       vars:
         BUNDLE_ID: az.workspot.app.sid
     scripts:
