@@ -254,6 +254,7 @@ class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   static const _oauthRedirectUri = 'com.example.workspot://login-callback/';
   static const _webOAuthRedirectUri = 'https://workspot.az';
+  static const _genericAuthErrorMessage = 'Giriş zamanı xəta baş verdi';
   static const String _adminBypassPin = String.fromEnvironment(
     'WORKSPOT_ADMIN_BYPASS_PIN',
     defaultValue: '123456',
@@ -583,10 +584,10 @@ class _AuthScreenState extends State<AuthScreen>
         callbackUri.queryParameters['error'];
 
     if (providerError != null) {
-      debugPrint('Google OAuth callback error: $providerError');
+      debugPrint('OAuth callback error: $providerError');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google ilə giriş alınmadı: $providerError')),
+          const SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
       return;
@@ -599,35 +600,32 @@ class _AuthScreenState extends State<AuthScreen>
     try {
       final auth = Supabase.instance.client.auth;
       if (auth.currentSession != null) {
-        debugPrint('Google OAuth callback session was restored automatically.');
+        debugPrint('OAuth callback session was restored automatically.');
         _openHomeAfterAuthentication();
         return;
       }
 
-      debugPrint('Exchanging Google OAuth callback code for a session.');
+      debugPrint('Exchanging OAuth callback code for a session.');
       final response = await auth.exchangeCodeForSession(authorizationCode);
       debugPrint(
-        'Google OAuth code exchange completed; '
+        'OAuth code exchange completed; '
         'userId: ${response.session.user.id}',
       );
       _openHomeAfterAuthentication();
     } on AuthException catch (error, stackTrace) {
-      debugPrint('Google OAuth callback exchange failed: ${error.message}');
+      debugPrint('OAuth callback exchange failed: ${error.message}');
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Google ilə giriş alınmadı: ${error.message}')),
+          const SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
     } catch (error, stackTrace) {
-      debugPrint('Unexpected Google OAuth callback error: $error');
+      debugPrint('Unexpected OAuth callback error: $error');
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Google giriş cavabı emal edilə bilmədi.'),
-          ),
+          const SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
     } finally {
