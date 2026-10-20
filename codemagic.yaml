@@ -22,6 +22,7 @@ workflows:
           pod install
       - name: Set up code signing
         script: |
+          set -e
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
@@ -30,9 +31,12 @@ workflows:
           keychain add-certificates
           xcode-project use-profiles
           echo "--- installed profiles ---"
-          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" || true
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles"
+          if [ -z "$(ls -A "$HOME/Library/MobileDevice/Provisioning Profiles" 2>/dev/null)" ]; then
+            echo "ERROR: no provisioning profile was installed"; exit 1
+          fi
           echo "--- pbxproj signing settings ---"
-          grep -nE "CODE_SIGN|PROVISIONING|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER" ios/Runner.xcodeproj/project.pbxproj
+          grep -nE "CODE_SIGN|PROVISIONING|DEVELOPMENT_TEAM" ios/Runner.xcodeproj/project.pbxproj
       - name: Build IPA
         script: |
           flutter build ipa --release \
