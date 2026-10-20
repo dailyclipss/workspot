@@ -6,6 +6,8 @@ workflows:
     integrations:
       app_store_connect: Workspot.az
     environment:
+      groups:
+        - signing
       flutter: stable
       xcode: latest
       cocoapods: default
