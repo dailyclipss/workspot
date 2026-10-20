@@ -12,7 +12,7 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        BUNDLE_ID: az.workspot.app.sid
+        BUNDLE_ID: az.workspot.app
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
