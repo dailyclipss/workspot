@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/app_language.dart';
 import '../services/geocoding_service.dart';
 import '../services/job_location_resolver.dart';
+import '../core/services/location_service.dart';
 import '../widgets/location_pin_marker.dart';
 import 'job_payment_screen.dart';
 
@@ -79,6 +80,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   bool _hasVacancy = true;
   bool _isVip = false;
   bool _isSubmitting = false;
+  bool _isLocating = false;
   bool _hasExplicitLocation = false;
   LatLng _selectedLocation = _defaultLocation;
   String _selectedDistrictPreview = 'Nərimanov';
@@ -87,6 +89,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   bool _isSearchingAddress = false;
   bool _suppressAddressSearch = false;
   int _geocodeRequestId = 0;
+  int _addressSearchRequestId = 0;
   gmaps.BitmapDescriptor? _pinIcon;
 
   @override
@@ -122,26 +125,79 @@ class _AddJobScreenState extends State<AddJobScreen> {
   }
 
   void _onMapTap(LatLng point) {
+    _searchDebounce?.cancel();
+    _addressSearchRequestId++;
     setState(() {
       _selectedLocation = point;
       _selectedDistrictPreview = _districtFromLocation(point);
       _selectedDistrict ??= _selectedDistrictPreview;
       _hasExplicitLocation = true;
       _suggestions = const [];
+      _isSearchingAddress = false;
     });
     _mapController?.animateCamera(gmaps.CameraUpdate.newLatLng(point));
     _reverseGeocode(point);
   }
 
+  void _onMapDrag(LatLng point) {
+    _searchDebounce?.cancel();
+    _addressSearchRequestId++;
+    _geocodeRequestId++;
+    setState(() {
+      _selectedLocation = point;
+      _selectedDistrictPreview = _districtFromLocation(point);
+      _hasExplicitLocation = true;
+      _suggestions = const [];
+      _isSearchingAddress = false;
+    });
+  }
+
   void _onMapDragEnd(LatLng point) {
+    _searchDebounce?.cancel();
+    _addressSearchRequestId++;
     setState(() {
       _selectedLocation = point;
       _selectedDistrictPreview = _districtFromLocation(point);
       _selectedDistrict = _districts.contains(_selectedDistrictPreview) ? _selectedDistrictPreview : _selectedDistrict;
       _hasExplicitLocation = true;
       _suggestions = const [];
+      _isSearchingAddress = false;
     });
     _reverseGeocode(point);
+  }
+
+  Future<void> _goToMyLocation() async {
+    if (_isLocating) return;
+    setState(() => _isLocating = true);
+    try {
+      final point = await LocationService.getCurrentLocation();
+      if (point == null) {
+        throw StateError('GPS koordinatları əldə olunmadı.');
+      }
+      if (!mounted) return;
+      _searchDebounce?.cancel();
+      _addressSearchRequestId++;
+      _geocodeRequestId++;
+      setState(() {
+        _selectedLocation = point;
+        _selectedDistrictPreview = _districtFromLocation(point);
+        _selectedDistrict ??= _selectedDistrictPreview;
+        _hasExplicitLocation = true;
+        _suggestions = const [];
+        _isSearchingAddress = false;
+      });
+      await _mapController?.animateCamera(
+        gmaps.CameraUpdate.newLatLngZoom(point, 16.5),
+      );
+      _reverseGeocode(point);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Məkan müəyyən edilə bilmədi: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
   }
 
   String? _matchDistrict(String? name) {
@@ -166,17 +222,20 @@ class _AddJobScreenState extends State<AddJobScreen> {
     _addressController.text = result.displayName;
     _suppressAddressSearch = false;
     final matched = _matchDistrict(result.district);
-    if (matched != null) {
-      setState(() {
+    setState(() {
+      _isSearchingAddress = false;
+      _suggestions = const [];
+      if (matched != null) {
         _selectedDistrict = matched;
         _selectedDistrictPreview = matched;
-      });
-    }
+      }
+    });
   }
 
   void _onAddressChanged(String value) {
     if (_suppressAddressSearch) return;
     _searchDebounce?.cancel();
+    final requestId = ++_addressSearchRequestId;
     if (value.trim().length < 3) {
       setState(() {
         _suggestions = const [];
@@ -187,7 +246,11 @@ class _AddJobScreenState extends State<AddJobScreen> {
     setState(() => _isSearchingAddress = true);
     _searchDebounce = Timer(const Duration(milliseconds: 450), () async {
       final results = await GeocodingService.search(value, lang: appLang.currentLanguage);
-      if (!mounted || _addressController.text != value) return;
+      if (!mounted ||
+          requestId != _addressSearchRequestId ||
+          _addressController.text != value) {
+        return;
+      }
       setState(() {
         _suggestions = results;
         _isSearchingAddress = false;
@@ -198,6 +261,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   void _selectSuggestion(AddressSuggestion suggestion) {
     FocusManager.instance.primaryFocus?.unfocus();
     final point = LatLng(suggestion.latitude, suggestion.longitude);
+    _addressSearchRequestId++;
     _geocodeRequestId++;
     _suppressAddressSearch = true;
     _addressController.text = suggestion.displayName;
@@ -229,6 +293,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
           markerId: const gmaps.MarkerId('selected_job_location'),
           position: _selectedLocation,
           draggable: true,
+          onDrag: _onMapDrag,
           onDragEnd: _onMapDragEnd,
           icon: _pinIcon ?? gmaps.BitmapDescriptor.defaultMarker,
           anchor: const Offset(0.5, 0.89),
@@ -637,20 +702,43 @@ class _AddJobScreenState extends State<AddJobScreen> {
                       border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.2)),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: gmaps.GoogleMap(
-                      initialCameraPosition: const gmaps.CameraPosition(
-                        target: _defaultLocation,
-                        zoom: 13.8,
-                      ),
-                      onMapCreated: (controller) {
-                        _mapController = controller;
-                      },
-                      onTap: _onMapTap,
-                      markers: _locationMarkers,
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: false,
-                      mapToolbarEnabled: false,
-                      compassEnabled: false,
+                    child: Stack(
+                      children: [
+                        gmaps.GoogleMap(
+                          initialCameraPosition: const gmaps.CameraPosition(
+                            target: _defaultLocation,
+                            zoom: 13.8,
+                          ),
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                          },
+                          onTap: _onMapTap,
+                          markers: _locationMarkers,
+                          myLocationButtonEnabled: false,
+                          zoomControlsEnabled: false,
+                          mapToolbarEnabled: false,
+                          compassEnabled: false,
+                        ),
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: FilledButton.tonalIcon(
+                            onPressed: _isLocating ? null : _goToMyLocation,
+                            icon: _isLocating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.my_location_rounded, size: 18),
+                            label: const Text('Mənim Məkanım'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF1E293B),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

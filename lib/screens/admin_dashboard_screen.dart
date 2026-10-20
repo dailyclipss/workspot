@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../admin/admin_approval_screen.dart';
+import '../core/services/location_service.dart';
 import '../services/admin_auth_service.dart';
 import '../services/app_language.dart';
+import '../services/geocoding_service.dart';
 import '../services/notification_service.dart';
 import '../services/presence_service.dart';
 import '../widgets/online_users_badge.dart';
@@ -500,6 +503,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           : '${existingSalary == existingSalary.roundToDouble() ? existingSalary.toInt() : existingSalary}',
     );
     final formKey = GlobalKey<FormState>();
+    final resolvedLocation = JobLocationResolver.ensureCoordinates(job);
+    var selectedLocation = gmaps.LatLng(
+      (resolvedLocation['latitude'] as num).toDouble(),
+      (resolvedLocation['longitude'] as num).toDouble(),
+    );
+    gmaps.GoogleMapController? mapController;
+    var geocodeRequestId = 0;
+    var isLocating = false;
     String adStatus = _jobAdStatus(job);
     bool hasVacancy = _jobHasVacancy(job);
     bool isVip = _jobBool(job['is_vip']);
@@ -520,7 +531,54 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: StatefulBuilder(
-                builder: (context, setSheetState) {
+                builder: (sheetBuilderContext, setSheetState) {
+                  Future<void> reverseGeocode(gmaps.LatLng point) async {
+                    final requestId = ++geocodeRequestId;
+                    final result = await GeocodingService.reverse(
+                      point.latitude,
+                      point.longitude,
+                    );
+                    if (!sheetContext.mounted ||
+                        requestId != geocodeRequestId ||
+                        result == null) {
+                      return;
+                    }
+                    setSheetState(() {
+                      addressController.text = result.displayName;
+                      final district = result.district?.trim();
+                      if (district != null && district.isNotEmpty) {
+                        districtController.text = district;
+                      }
+                    });
+                  }
+
+                  Future<void> goToMyLocation() async {
+                    if (isLocating) return;
+                    setSheetState(() => isLocating = true);
+                    try {
+                      final point = await LocationService.getCurrentLocation();
+                      if (point == null) {
+                        throw StateError('GPS koordinatları əldə olunmadı.');
+                      }
+                      if (!sheetContext.mounted) return;
+                      geocodeRequestId++;
+                      setSheetState(() => selectedLocation = point);
+                      await mapController?.animateCamera(
+                        gmaps.CameraUpdate.newLatLngZoom(point, 16.5),
+                      );
+                      await reverseGeocode(point);
+                    } catch (error) {
+                      if (!sheetContext.mounted) return;
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        SnackBar(content: Text('Məkan müəyyən edilə bilmədi: $error')),
+                      );
+                    } finally {
+                      if (sheetContext.mounted) {
+                        setSheetState(() => isLocating = false);
+                      }
+                    }
+                  }
+
                   return SingleChildScrollView(
                     controller: controller,
                     padding: EdgeInsets.fromLTRB(
@@ -570,6 +628,79 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           ),
                           const SizedBox(height: 12),
                           _sheetField(addressController, 'Ünvan'),
+                          const SizedBox(height: 12),
+                          Container(
+                            height: 220,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: _border),
+                            ),
+                            child: Stack(
+                              children: [
+                                gmaps.GoogleMap(
+                                  initialCameraPosition: gmaps.CameraPosition(
+                                    target: selectedLocation,
+                                    zoom: 14,
+                                  ),
+                                  onMapCreated: (controller) {
+                                    mapController = controller;
+                                  },
+                                  onTap: (point) {
+                                    setSheetState(() => selectedLocation = point);
+                                    reverseGeocode(point);
+                                  },
+                                  markers: {
+                                    gmaps.Marker(
+                                      markerId: const gmaps.MarkerId('job_location'),
+                                      position: selectedLocation,
+                                      draggable: true,
+                                      onDrag: (point) {
+                                        geocodeRequestId++;
+                                        setSheetState(
+                                          () => selectedLocation = point,
+                                        );
+                                      },
+                                      onDragEnd: (point) {
+                                        setSheetState(
+                                          () => selectedLocation = point,
+                                        );
+                                        reverseGeocode(point);
+                                      },
+                                    ),
+                                  },
+                                  myLocationButtonEnabled: false,
+                                  zoomControlsEnabled: false,
+                                  mapToolbarEnabled: false,
+                                  compassEnabled: false,
+                                ),
+                                Positioned(
+                                  top: 10,
+                                  right: 10,
+                                  child: FilledButton.tonalIcon(
+                                    onPressed: isLocating ? null : goToMyLocation,
+                                    icon: isLocating
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.my_location_rounded,
+                                            size: 18,
+                                          ),
+                                    label: const Text('Mənim Məkanım'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: _background,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           TextFormField(
                             controller: descriptionController,
@@ -634,6 +765,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         'category': categoryController.text.trim(),
                                         'district': districtController.text.trim(),
                                         'address': addressController.text.trim(),
+                                        'latitude': selectedLocation.latitude,
+                                        'longitude': selectedLocation.longitude,
                                         'description': descriptionController.text.trim(),
                                         'phone_whatsapp': phoneController.text.trim(),
                                         'instagram': instagramController.text.trim(),
