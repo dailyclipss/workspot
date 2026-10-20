@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: TT66J9DYSP
+      app_store_connect: Workspot.az
     environment:
       flutter: stable
       xcode: latest
