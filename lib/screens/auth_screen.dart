@@ -636,14 +636,53 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _handleAppleAuth() async {
+    if (_isLoadingApple) return;
+
     setState(() => _isLoadingApple = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-    setState(() => _isLoadingApple = false);
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const HomeMapScreen()),
-    );
+    try {
+      const redirectTo = kIsWeb ? _webOAuthRedirectUri : _oauthRedirectUri;
+      debugPrint('Starting Supabase Apple OAuth with redirect URI: $redirectTo');
+      final launched = await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.apple,
+        redirectTo: redirectTo,
+        authScreenLaunchMode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
+      );
+      debugPrint('Supabase Apple OAuth browser launched: $launched');
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Apple giriş səhifəsi açıla bilmədi.'),
+          ),
+        );
+      }
+    } on AuthException catch (error, stackTrace) {
+      debugPrint('Supabase Apple OAuth failed: ${error.message}');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Apple ilə giriş alınmadı: ${error.message}')),
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Unexpected Apple OAuth error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Apple ilə giriş zamanı gözlənilməz xəta baş verdi.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingApple = false);
+      }
+    }
   }
 
   Future<void> _handleGuestAuth() async {
