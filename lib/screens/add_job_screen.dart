@@ -702,43 +702,41 @@ class _AddJobScreenState extends State<AddJobScreen> {
                       border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.2)),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: Stack(
-                      children: [
-                        gmaps.GoogleMap(
-                          initialCameraPosition: const gmaps.CameraPosition(
-                            target: _defaultLocation,
-                            zoom: 13.8,
-                          ),
-                          onMapCreated: (controller) {
-                            _mapController = controller;
-                          },
-                          onTap: _onMapTap,
-                          markers: _locationMarkers,
-                          myLocationButtonEnabled: false,
-                          zoomControlsEnabled: false,
-                          mapToolbarEnabled: false,
-                          compassEnabled: false,
-                        ),
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: FilledButton.tonalIcon(
-                            onPressed: _isLocating ? null : _goToMyLocation,
-                            icon: _isLocating
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.my_location_rounded, size: 18),
-                            label: const Text('Mənim Məkanım'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF1E293B),
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: gmaps.GoogleMap(
+                      initialCameraPosition: const gmaps.CameraPosition(
+                        target: _defaultLocation,
+                        zoom: 13.8,
+                      ),
+                      onMapCreated: (controller) {
+                        _mapController = controller;
+                      },
+                      onTap: _onMapTap,
+                      markers: _locationMarkers,
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: false,
+                      mapToolbarEnabled: false,
+                      compassEnabled: false,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLocating ? null : _goToMyLocation,
+                      icon: _isLocating
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location_rounded, size: 18),
+                      label: const Text('Mənim Məkanım'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF2563EB),
+                        side: BorderSide(color: const Color(0xFF2563EB).withOpacity(0.4)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
                     ),
                   ),
                 ],
