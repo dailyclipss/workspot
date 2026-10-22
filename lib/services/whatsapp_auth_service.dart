@@ -8,6 +8,9 @@ class WhatsAppAuthService {
       : _client = client ?? Supabase.instance.client;
 
   static const _otpLifetime = Duration(minutes: 2);
+  // App Store review demo account: no WhatsApp message is sent for this number.
+  static const _reviewPhoneNumber = '+994501234567';
+  static const _reviewOtpCode = '123456';
   static final RegExp _azerbaijanPhonePattern = RegExp(
     r'^\+994(?:10|50|51|55|60|70|77|99)\d{7}$',
   );
@@ -32,14 +35,18 @@ class WhatsAppAuthService {
       throw const FormatException('A valid +994 phone number is required.');
     }
 
-    final otpCode = _generateOtpCode();
-    await _client.functions.invoke(
-      'send-whatsapp-otp',
-      body: {
-        'phone': normalizedPhoneNumber.substring(1),
-        'otpCode': otpCode,
-      },
-    );
+    final otpCode = normalizedPhoneNumber == _reviewPhoneNumber
+        ? _reviewOtpCode
+        : _generateOtpCode();
+    if (normalizedPhoneNumber != _reviewPhoneNumber) {
+      await _client.functions.invoke(
+        'send-whatsapp-otp',
+        body: {
+          'phone': normalizedPhoneNumber.substring(1),
+          'otpCode': otpCode,
+        },
+      );
+    }
 
     _phoneNumber = normalizedPhoneNumber;
     _otpCode = otpCode;
@@ -60,6 +67,10 @@ class WhatsAppAuthService {
       throw StateError('Invalid or expired OTP code.');
     }
 
+    if (normalizedPhoneNumber == _reviewPhoneNumber) {
+      await _ensureReviewSupabaseSession();
+    }
+
     final session = WhatsAppAuthSession(
       phoneNumber: normalizedPhoneNumber,
       signedInAt: DateTime.now(),
@@ -68,6 +79,17 @@ class WhatsAppAuthService {
     _otpCode = null;
     _expiresAt = null;
     return session;
+  }
+
+  // Supabase-dependent actions (posting jobs, payments) need an authenticated
+  // user, so the review account gets an anonymous Supabase session.
+  Future<void> _ensureReviewSupabaseSession() async {
+    if (_client.auth.currentSession != null) return;
+    try {
+      await _client.auth.signInAnonymously();
+    } catch (error) {
+      debugPrint('Review account anonymous Supabase sign-in failed: $error');
+    }
   }
 
   String _generateOtpCode() {
