@@ -580,6 +580,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever_rounded,
+                        color: Colors.red),
+                    title: const Text('Hesabı sil',
+                        style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _confirmDeleteAccount();
+                    },
+                  ),
                 ],
               ),
             );
@@ -587,6 +600,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       },
     );
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hesabı sil'),
+        content: const Text(
+            'Hesabınız, profiliniz, CV-niz və bütün məlumatlarınız həmişəlik silinəcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Ləğv et'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sil', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await Supabase.instance.client.rpc('delete_my_account');
+      try {
+        await Supabase.instance.client.auth.signOut();
+      } catch (_) {}
+      navigator.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        (Route<dynamic> route) => false,
+      );
+    } catch (error) {
+      debugPrint('delete account failed: $error');
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Hesabı silmək alınmadı. Bir az sonra yenidən cəhd edin.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // CV YÜKLƏMƏ / YENİLMƏ MODALİ
