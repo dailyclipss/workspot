@@ -286,16 +286,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _pickCvFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
-      withData: true,
     );
-    if (!mounted || result == null || result.files.isEmpty) return;
+    if (!mounted || file == null) return;
 
-    final file = result.files.single;
     const maxFileSize = 10 * 1024 * 1024;
-    if (file.size > maxFileSize) {
+    if ((await file.length() ?? 0) > maxFileSize) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('CV faylının həcmi 10 MB-dan çox ola bilməz.'),
@@ -306,7 +304,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final user = Supabase.instance.client.auth.currentUser;
-    final bytes = file.bytes;
+    final bytes = user == null ? null : await file.readAsBytes();
+    if (!mounted) return;
     if (user == null || bytes == null) {
       _showUploadMessage('CV yükləmək üçün hesaba daxil olun.', isError: true);
       return;
