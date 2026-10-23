@@ -46,6 +46,7 @@ android {
             // R8 stripped WorkManager/Room classes and crashed the app on launch.
             isMinifyEnabled = false
             isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Falls back to debug keys locally when no CI keystore is provided.
             signingConfig = if (System.getenv("CM_KEYSTORE_PATH") != null)
                 signingConfigs.getByName("release")
