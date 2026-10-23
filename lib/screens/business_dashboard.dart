@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/app_language.dart';
-import '../services/payment_service.dart';
 import 'add_job_screen.dart';
 import 'home_map_screen.dart';
-import 'payment_checkout_screen.dart';
 
 class BusinessDashboardScreen extends StatefulWidget {
   const BusinessDashboardScreen({super.key});
@@ -73,19 +71,6 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
     if (mounted) await _fetchDashboardData();
   }
 
-  void _openUpgrade() {
-    final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentCheckoutScreen(
-          targetId: userId,
-          targetType: PaymentTargetType.company,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,7 +98,8 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                           color: Colors.white),
                       label: Text(appLang.translate('post_new_job'),
                           style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold)),
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _blue,
                         shape: RoundedRectangleBorder(
@@ -164,47 +150,13 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFFE066), Color(0xFFB8860B)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.workspace_premium_rounded,
-                            color: Colors.white),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            appLang.translate('upgrade_for_analytics'),
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: _openUpgrade,
-                          child: const Text('Pro',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => const HomeMapScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const HomeMapScreen()),
                       ),
                       icon: const Icon(Icons.map_rounded, color: Colors.white),
                       label: Text(appLang.translate('switch_to_map'),

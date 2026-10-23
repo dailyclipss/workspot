@@ -67,9 +67,7 @@ class WhatsAppAuthService {
       throw StateError('Invalid or expired OTP code.');
     }
 
-    if (normalizedPhoneNumber == _reviewPhoneNumber) {
-      await _ensureReviewSupabaseSession();
-    }
+    await _ensureSupabaseSession();
 
     final session = WhatsAppAuthSession(
       phoneNumber: normalizedPhoneNumber,
@@ -81,15 +79,11 @@ class WhatsAppAuthService {
     return session;
   }
 
-  // Supabase-dependent actions (posting jobs, payments) need an authenticated
-  // user, so the review account gets an anonymous Supabase session.
-  Future<void> _ensureReviewSupabaseSession() async {
+  // The WhatsApp OTP is verified by the app, while Supabase supplies the
+  // authenticated identity required by backend policies.
+  Future<void> _ensureSupabaseSession() async {
     if (_client.auth.currentSession != null) return;
-    try {
-      await _client.auth.signInAnonymously();
-    } catch (error) {
-      debugPrint('Review account anonymous Supabase sign-in failed: $error');
-    }
+    await _client.auth.signInAnonymously();
   }
 
   String _generateOtpCode() {

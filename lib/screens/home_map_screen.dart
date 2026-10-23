@@ -18,12 +18,11 @@ import '../models/job_model.dart';
 import '../services/app_language.dart';
 import '../services/location_service.dart';
 import '../services/job_location_resolver.dart';
+import '../services/job_moderation_service.dart';
 import 'add_job_screen.dart' hide LatLng;
 import 'company_details_screen.dart';
 import 'notifications_screen.dart';
-import 'payment_checkout_screen.dart';
 import 'profile_screen.dart';
-import '../services/payment_service.dart';
 import '../utils/contact_utils.dart';
 
 class _CategoryMeta {
@@ -127,6 +126,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       'ca-app-pub-7785740776753328/4600628474';
 
   final ApplicationService _applicationService = ApplicationService();
+  final JobModerationService _moderationService = JobModerationService();
   final TextEditingController _searchController = TextEditingController();
 
   BannerAd? _bannerAd;
@@ -176,6 +176,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   ];
 
   List<Map<String, dynamic>> _allJobs = [];
+  Set<String> _blockedEmployerIds = {};
 
   @override
   void initState() {
@@ -192,8 +193,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       _loadBannerAd();
     }
     _loadUserLocation();
-    _fetchMapJobs();
-    _listenToJobs();
+    _initializeJobs();
     _jobsRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         _fetchMapJobs();
@@ -214,6 +214,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           SnackBar(content: Text(widget.flashMessage!)),
         );
       });
+    }
+  }
+
+  Future<void> _initializeJobs() async {
+    try {
+      _blockedEmployerIds = await _moderationService.loadBlockedEmployerIds();
+      if (!mounted) return;
+      await _fetchMapJobs();
+      if (!mounted) return;
+      _listenToJobs();
+    } catch (error) {
+      debugPrint('Could not initialize job moderation: $error');
+      _setMapDebugMessage(
+          'Job moderation settings could not be loaded: $error');
     }
   }
 
@@ -480,6 +494,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   bool _shouldShowJobOnMap(Map<String, dynamic> job) {
+    final employerId = _jobEmployerId(job);
+    if (employerId != null && _blockedEmployerIds.contains(employerId)) {
+      return false;
+    }
     final adStatus = _jobText(job, 'ad_status', _jobText(job, 'status', ''))
         .toLowerCase()
         .trim();
@@ -490,6 +508,12 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         adStatus == 'approved' ||
         isActiveFlag ||
         _jobBool(job['is_vip']);
+  }
+
+  String? _jobEmployerId(Map<String, dynamic> job) {
+    final value = job['owner_id'] ?? job['created_by'];
+    final employerId = value?.toString().trim();
+    return employerId == null || employerId.isEmpty ? null : employerId;
   }
 
   bool _rawJobMissingCoordinates(Map<String, dynamic> job) {
@@ -714,7 +738,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final items = <_JobClusterItem>[];
     for (final group in groups.values) {
       if (group.length == 1) {
-        items.add(_JobClusterItem(job: group.first.key, point: group.first.value));
+        items.add(
+            _JobClusterItem(job: group.first.key, point: group.first.value));
         continue;
       }
       group.sort((a, b) => (a.key['id']?.toString() ?? '')
@@ -1332,6 +1357,168 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     }
   }
 
+  Future<void> _reportJob(Map<String, dynamic> job) async {
+    final client = supabase.Supabase.instance.client;
+    if (client.auth.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appLang.translate('moderation_sign_in'))),
+      );
+      return;
+    }
+
+    final jobId = job['id']?.toString();
+    if (jobId == null || jobId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appLang.translate('report_failed'))),
+      );
+      return;
+    }
+
+    final detailsController = TextEditingController();
+    String selectedReason = 'scam';
+    final report = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(appLang.translate('report_job_title')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: selectedReason,
+                decoration: InputDecoration(
+                  labelText: appLang.translate('report_reason_label'),
+                ),
+                items: [
+                  ('scam', 'report_reason_scam'),
+                  ('misleading', 'report_reason_misleading'),
+                  ('inappropriate', 'report_reason_inappropriate'),
+                  ('contact_abuse', 'report_reason_contact_abuse'),
+                  ('other', 'report_reason_other'),
+                ]
+                    .map(
+                      (reason) => DropdownMenuItem(
+                        value: reason.$1,
+                        child: Text(appLang.translate(reason.$2)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setDialogState(() => selectedReason = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: detailsController,
+                maxLength: 1000,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: appLang.translate('report_details_hint'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(appLang.translate('cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, {
+                'reason': selectedReason,
+                'details': detailsController.text.trim(),
+              }),
+              child: Text(appLang.translate('report_submit')),
+            ),
+          ],
+        ),
+      ),
+    );
+    final details = detailsController.text.trim();
+    detailsController.dispose();
+    if (report == null) return;
+
+    try {
+      await _moderationService.reportJob(
+        jobId: jobId,
+        reason: report['reason']!,
+        details: details.isEmpty ? null : details,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appLang.translate('report_submitted'))),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${appLang.translate('report_failed')} $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _blockEmployer(Map<String, dynamic> job) async {
+    final client = supabase.Supabase.instance.client;
+    final employerId = _jobEmployerId(job);
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appLang.translate('moderation_sign_in'))),
+      );
+      return;
+    }
+    if (employerId == null || employerId == userId) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(appLang.translate('block_employer_title')),
+        content: Text(appLang.translate('block_employer_message')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(appLang.translate('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(appLang.translate('block_employer')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await _moderationService.blockEmployer(employerId);
+      if (!mounted) return;
+      setState(() {
+        _blockedEmployerIds = {..._blockedEmployerIds, employerId};
+        _allJobs = _allJobs
+            .where((candidate) => _jobEmployerId(candidate) != employerId)
+            .toList();
+      });
+      _dismissJobDetailsOverlay();
+      await _refreshVisibleJobMarkers();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appLang.translate('employer_blocked'))),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${appLang.translate('employer_block_failed')} $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -1532,7 +1719,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
               onPressed: () => setState(() => _isFilterOpen = !_isFilterOpen),
             ),
-            _buildVipBizButton(),
             IconButton(
               icon: const Icon(Icons.notifications_none_rounded),
               onPressed: () async {
@@ -1578,53 +1764,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             ),
             const SizedBox(width: 4),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVipBizButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Tooltip(
-        message: appLang.translate('vip_biznes_button'),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: _openVipBusinessCheckout,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFE066), Color(0xFFB8860B)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withOpacity(0.55)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFFD700).withOpacity(0.45),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: const Icon(Icons.workspace_premium_rounded,
-                color: Colors.white, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openVipBusinessCheckout() {
-    final userId = supabase.Supabase.instance.client.auth.currentUser?.id ?? '';
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentCheckoutScreen(
-          targetId: userId,
-          targetType: PaymentTargetType.proSubscription,
         ),
       ),
     );
@@ -2212,6 +2351,25 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ),
           ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton.icon(
+                onPressed: () => _reportJob(job),
+                icon: const Icon(Icons.flag_outlined, size: 18),
+                label: Text(appLang.translate('report_job')),
+              ),
+              if (_jobEmployerId(job) != null &&
+                  _jobEmployerId(job) !=
+                      supabase.Supabase.instance.client.auth.currentUser?.id)
+                TextButton.icon(
+                  onPressed: () => _blockEmployer(job),
+                  icon: const Icon(Icons.block_outlined, size: 18),
+                  label: Text(appLang.translate('block_employer')),
+                ),
+            ],
+          ),
         ],
       ),
     );

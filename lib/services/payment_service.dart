@@ -157,8 +157,7 @@ class PaymentService {
         return 'Payment server error (${response.statusCode})'
             '${detail != null ? ': $detail' : '.'}';
       }
-      final redirectUrl =
-          (body['redirect_url'] ?? body['url']) as String?;
+      final redirectUrl = (body['redirect_url'] ?? body['url']) as String?;
       if (redirectUrl == null || redirectUrl.isEmpty) {
         return 'Payment page URL was not returned.';
       }
@@ -257,22 +256,18 @@ class PaymentService {
     }
   }
 
-  // Placeholder POS charge — replace with the real merchant POS SDK call.
   Future<String> _chargeLocalPos(PaymentPackage package) async {
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    return 'pos_${DateTime.now().millisecondsSinceEpoch}';
+    throw UnsupportedError(
+      'Local POS payments are unavailable. Use the configured payment gateway.',
+    );
   }
 
-  // Placeholder Apple IAP charge — replace with `in_app_purchase` StoreKit flow.
   Future<String> _chargeAppleIap(PaymentPackage package) async {
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    return 'apple_iap_${DateTime.now().millisecondsSinceEpoch}';
+    throw UnsupportedError('Apple in-app purchases are not configured.');
   }
 
-  // Placeholder Google IAP charge — replace with `in_app_purchase` Play Billing flow.
   Future<String> _chargeGoogleIap(PaymentPackage package) async {
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    return 'google_iap_${DateTime.now().millisecondsSinceEpoch}';
+    throw UnsupportedError('Google Play purchases are not configured.');
   }
 
   Future<void> _recordSuccessfulPayment({

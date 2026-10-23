@@ -5,10 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
 import '../services/app_language.dart';
 import '../services/admin_auth_service.dart';
-import '../services/payment_service.dart';
 import 'auth_screen.dart';
 import 'home_map_screen.dart';
-import 'payment_checkout_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -44,7 +42,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     appLang.addListener(_onLanguageChanged);
-    final avatarUrl = Supabase.instance.client.auth.currentUser?.userMetadata?['avatar_url']?.toString();
+    final avatarUrl = Supabase
+        .instance.client.auth.currentUser?.userMetadata?['avatar_url']
+        ?.toString();
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       _profileImageUrl = avatarUrl;
     }
@@ -65,8 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Theme-aware palette driven by the app-wide ThemeService via ThemeData.
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
-  Color get _bg =>
-      _isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+  Color get _bg => _isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
   Color get _surface => _isDark ? const Color(0xFF1E293B) : Colors.white;
   Color get _text => _isDark ? Colors.white : const Color(0xFF0F172A);
   Color get _textSoft =>
@@ -101,7 +100,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadAdminStatus() async {
-    final isAdmin = await AdminAuthService.isAdminUser(Supabase.instance.client);
+    final isAdmin =
+        await AdminAuthService.isAdminUser(Supabase.instance.client);
     if (!mounted) return;
     setState(() => _isAdminUser = isAdmin);
   }
@@ -125,18 +125,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             status.contains('accepted');
       }).length;
 
-  String get _cvLabel =>
-      _uploadedCvName.isEmpty ? appLang.translate('cv_not_uploaded') : _uploadedCvName;
+  String get _cvLabel => _uploadedCvName.isEmpty
+      ? appLang.translate('cv_not_uploaded')
+      : _uploadedCvName;
 
   Future<void> _loadProfile() async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
     if (user == null) return;
-    Future<Map<String, dynamic>?> fetch(String columns) => client
-        .from('profiles')
-        .select(columns)
-        .eq('id', user.id)
-        .maybeSingle();
+    Future<Map<String, dynamic>?> fetch(String columns) =>
+        client.from('profiles').select(columns).eq('id', user.id).maybeSingle();
 
     Map<String, dynamic>? profile;
     try {
@@ -145,7 +143,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       } on PostgrestException catch (error) {
         // CV columns may not exist yet (migration not applied): the name,
         // profession and phone must still load.
-        debugPrint('Profile load (with CV) failed: ${error.code} ${error.message}');
+        debugPrint(
+            'Profile load (with CV) failed: ${error.code} ${error.message}');
         profile = await fetch('full_name, phone, profession');
       }
       if (!mounted) return;
@@ -363,7 +362,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
-        _showUploadMessage('Şəkil yükləmək üçün hesaba daxil olun.', isError: true);
+        _showUploadMessage('Şəkil yükləmək üçün hesaba daxil olun.',
+            isError: true);
         return;
       }
 
@@ -377,9 +377,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             imageBytes,
             fileOptions: FileOptions(contentType: contentType, upsert: true),
           );
-      final publicUrl = Supabase.instance.client.storage
-          .from('avatars')
-          .getPublicUrl(path);
+      final publicUrl =
+          Supabase.instance.client.storage.from('avatars').getPublicUrl(path);
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(data: {'avatar_url': publicUrl}),
       );
@@ -488,47 +487,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SwitchListTile(
                     title: Text(appLang.translate('settings_notifications'),
                         style: TextStyle(
-                        color: _text,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14)),
+                            color: _text,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14)),
                     subtitle: Text(
-                      appLang.translate('notifications_nearby_subtitle'),
-                      style: TextStyle(
-                        color: _muted, fontSize: 12)),
+                        appLang.translate('notifications_nearby_subtitle'),
+                        style: TextStyle(color: _muted, fontSize: 12)),
                     value: _pushNotifications,
                     activeColor: const Color(0xFF2563EB),
                     onChanged: (val) {
                       setModalState(() => _pushNotifications = val);
                       setState(() {});
-                    },
-                  ),
-                  Divider(color: _line),
-
-                  // WorkSpot Biznes & Paketlər
-                  ListTile(
-                    leading: const Icon(Icons.workspace_premium_rounded,
-                        color: Color(0xFFFFD700)),
-                    title: Text(appLang.translate('biznes_packages_title'),
-                        style: TextStyle(
-                            color: _text,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14)),
-                    subtitle: Text(
-                        appLang.translate('biznes_packages_subtitle'),
-                        style: TextStyle(color: _muted, fontSize: 12)),
-                    onTap: () {
-                      Navigator.pop(context);
-                      final userId =
-                          Supabase.instance.client.auth.currentUser?.id ?? '';
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PaymentCheckoutScreen(
-                            targetId: userId,
-                            targetType: PaymentTargetType.proSubscription,
-                          ),
-                        ),
-                      );
                     },
                   ),
                   Divider(color: _line),
@@ -574,8 +543,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       }
                       // Arxadakı bütün ekranları silir və Giriş ekranına atır
                       navigator.pushAndRemoveUntil(
-                        MaterialPageRoute(
-                            builder: (_) => const AuthScreen()),
+                        MaterialPageRoute(builder: (_) => const AuthScreen()),
                         (Route<dynamic> route) => false,
                       );
                     },
@@ -638,7 +606,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       debugPrint('delete account failed: $error');
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Hesabı silmək alınmadı. Bir az sonra yenidən cəhd edin.'),
+          content:
+              Text('Hesabı silmək alınmadı. Bir az sonra yenidən cəhd edin.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -662,9 +631,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Text('Rəqəmsal CV-ni Yenilə',
                   style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: _text)),
+                      fontSize: 18, fontWeight: FontWeight.bold, color: _text)),
               const SizedBox(height: 8),
               Text('${appLang.translate('current_file')}: $_cvLabel',
                   style: TextStyle(fontSize: 12, color: _textSoft)),
@@ -881,8 +848,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     child: _profileImageBytes == null &&
                                             _profileImageUrl == null
                                         ? const Icon(Icons.person,
-                                            size: 38,
-                                            color: Color(0xFF2563EB))
+                                            size: 38, color: Color(0xFF2563EB))
                                         : null,
                                   ),
                                   Positioned(
@@ -928,7 +894,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           ? _profileLoading
                                               ? '...'
                                               : appLang.translate(
-                                              'profile_name_placeholder')
+                                                  'profile_name_placeholder')
                                           : _userName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -1162,7 +1128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Row(
                       children: [
                         FilterChip(
-                            label: Text(
+                          label: Text(
                               '${appLang.translate('tab_all')} (${_myApplications.length})'),
                           selected: _selectedFilter == 'all',
                           selectedColor: const Color(0xFF2563EB),
@@ -1258,8 +1224,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Text(
                                     appLang.translate('no_applications_sub'),
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color: _muted, fontSize: 13),
+                                    style:
+                                        TextStyle(color: _muted, fontSize: 13),
                                   ),
                                   const SizedBox(height: 18),
                                   ElevatedButton.icon(
@@ -1273,7 +1239,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     },
                                     icon: const Icon(Icons.map_outlined,
                                         color: Colors.white, size: 18),
-                                    label: Text(appLang.translate('find_jobs_map'),
+                                    label: Text(
+                                        appLang.translate('find_jobs_map'),
                                         style: TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.bold)),

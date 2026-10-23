@@ -16,7 +16,9 @@ class AppLanguage extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getString(_prefKey);
-      if (saved != null && supported.contains(saved) && saved != _currentLanguage) {
+      if (saved != null &&
+          supported.contains(saved) &&
+          saved != _currentLanguage) {
         _currentLanguage = saved;
         notifyListeners();
       }
@@ -51,7 +53,8 @@ class AppLanguage extends ChangeNotifier {
       final user = auth.currentUser;
       if (user == null) return;
       if (user.userMetadata?['language'] == _currentLanguage) return;
-      await auth.updateUser(UserAttributes(data: {'language': _currentLanguage}));
+      await auth
+          .updateUser(UserAttributes(data: {'language': _currentLanguage}));
     } catch (e) {
       debugPrint('AppLanguage.syncToAccount failed: $e');
     }
@@ -197,6 +200,26 @@ class AppLanguage extends ChangeNotifier {
       'city_baku': 'Bakı',
       'status_new': 'Yeni',
       'no_description': 'Vakansiya haqqında məlumat yoxdur.',
+      'report_job': 'Elanı şikayət et',
+      'block_employer': 'İşəgötürəni blokla',
+      'report_job_title': 'Elanı şikayət et',
+      'report_reason_label': 'Şikayət səbəbi',
+      'report_reason_scam': 'Dələduzluq və ya saxta elan',
+      'report_reason_misleading': 'Yanlış və ya aldadıcı məlumat',
+      'report_reason_inappropriate': 'Uyğunsuz məzmun',
+      'report_reason_contact_abuse': 'Əlaqə məlumatlarından sui-istifadə',
+      'report_reason_other': 'Digər',
+      'report_details_hint': 'Əlavə məlumat (istəyə bağlı)',
+      'report_submit': 'Şikayəti göndər',
+      'report_submitted': 'Şikayətiniz göndərildi. Təşəkkür edirik.',
+      'report_failed': 'Şikayət göndərilmədi.',
+      'block_employer_title': 'İşəgötürəni blokla?',
+      'block_employer_message':
+          'Bu işəgötürənin elanları xəritədə sizə göstərilməyəcək.',
+      'employer_blocked': 'İşəgötürən bloklandı.',
+      'employer_block_failed': 'İşəgötürən bloklanmadı.',
+      'moderation_sign_in': 'Bu əməliyyat üçün əvvəlcə hesaba daxil olun.',
+      'cancel': 'Ləğv et',
       'edit_profile': 'Profili Redaktə Et',
       'edit_profile_name_label': 'Ad və Soyad',
       'edit_profile_name_hint': 'Ad və soyadınızı daxil edin',
@@ -339,7 +362,8 @@ class AppLanguage extends ChangeNotifier {
       'pj_description': 'Təsvir',
       'pj_pay': 'Epoint ilə Ödəniş Et',
       'pj_waiting': 'Ödəniş gözlənilir',
-      'pj_waiting_sub': 'Epoint ödəniş səhifəsində ödənişi tamamlayın. Təsdiqdən sonra elan avtomatik dərc olunacaq.',
+      'pj_waiting_sub':
+          'Epoint ödəniş səhifəsində ödənişi tamamlayın. Təsdiqdən sonra elan avtomatik dərc olunacaq.',
       'pj_check': 'Ödənişi yoxla',
       'pj_success': 'Ödəniş uğurlu oldu',
       'pj_success_sub': 'Vakansiyanız uğurla dərc olundu.',
@@ -515,6 +539,27 @@ class AppLanguage extends ChangeNotifier {
       'city_baku': 'Баку',
       'status_new': 'Новое',
       'no_description': 'Описание отсутствует.',
+      'report_job': 'Пожаловаться на вакансию',
+      'block_employer': 'Заблокировать работодателя',
+      'report_job_title': 'Пожаловаться на вакансию',
+      'report_reason_label': 'Причина жалобы',
+      'report_reason_scam': 'Мошенничество или фальшивая вакансия',
+      'report_reason_misleading':
+          'Ложная или вводящая в заблуждение информация',
+      'report_reason_inappropriate': 'Неприемлемый контент',
+      'report_reason_contact_abuse': 'Злоупотребление контактными данными',
+      'report_reason_other': 'Другое',
+      'report_details_hint': 'Дополнительная информация (необязательно)',
+      'report_submit': 'Отправить жалобу',
+      'report_submitted': 'Жалоба отправлена. Спасибо.',
+      'report_failed': 'Не удалось отправить жалобу.',
+      'block_employer_title': 'Заблокировать работодателя?',
+      'block_employer_message':
+          'Вакансии этого работодателя больше не будут отображаться на карте.',
+      'employer_blocked': 'Работодатель заблокирован.',
+      'employer_block_failed': 'Не удалось заблокировать работодателя.',
+      'moderation_sign_in': 'Войдите в аккаунт, чтобы выполнить это действие.',
+      'cancel': 'Отмена',
       'edit_profile': 'Редактировать профиль',
       'edit_profile_name_label': 'Имя и фамилия',
       'edit_profile_name_hint': 'Введите имя и фамилию',
@@ -649,8 +694,10 @@ class AppLanguage extends ChangeNotifier {
       'pj_options_sub': 'Выберите пакет перед оплатой через Epoint.',
       'pj_standard': 'Стандартное объявление',
       'pj_premium': 'Премиум-объявление',
-      'pj_standard_desc': '10 AZN - Опубликуйте вакансию со стандартной видимостью.',
-      'pj_premium_desc': '20 AZN - Более заметное объявление с VIP-приоритетом.',
+      'pj_standard_desc':
+          '10 AZN - Опубликуйте вакансию со стандартной видимостью.',
+      'pj_premium_desc':
+          '20 AZN - Более заметное объявление с VIP-приоритетом.',
       'pj_summary': 'Сводка заказа',
       'pj_amount': 'Сумма',
       'pj_currency': 'Валюта',
@@ -658,7 +705,8 @@ class AppLanguage extends ChangeNotifier {
       'pj_description': 'Описание',
       'pj_pay': 'Оплатить через Epoint',
       'pj_waiting': 'Ожидание оплаты',
-      'pj_waiting_sub': 'Завершите оплату на странице Epoint. После подтверждения объявление будет опубликовано автоматически.',
+      'pj_waiting_sub':
+          'Завершите оплату на странице Epoint. После подтверждения объявление будет опубликовано автоматически.',
       'pj_check': 'Проверить оплату',
       'pj_success': 'Оплата прошла успешно',
       'pj_success_sub': 'Ваша вакансия успешно опубликована.',
@@ -833,6 +881,26 @@ class AppLanguage extends ChangeNotifier {
       'city_baku': 'Baku',
       'status_new': 'New',
       'no_description': 'No description available.',
+      'report_job': 'Report this job',
+      'block_employer': 'Block employer',
+      'report_job_title': 'Report this job',
+      'report_reason_label': 'Reason for report',
+      'report_reason_scam': 'Scam or fake job',
+      'report_reason_misleading': 'False or misleading information',
+      'report_reason_inappropriate': 'Inappropriate content',
+      'report_reason_contact_abuse': 'Contact information abuse',
+      'report_reason_other': 'Other',
+      'report_details_hint': 'Additional details (optional)',
+      'report_submit': 'Submit report',
+      'report_submitted': 'Your report was submitted. Thank you.',
+      'report_failed': 'Could not submit the report.',
+      'block_employer_title': 'Block this employer?',
+      'block_employer_message':
+          'Jobs from this employer will no longer appear on your map.',
+      'employer_blocked': 'Employer blocked.',
+      'employer_block_failed': 'Could not block the employer.',
+      'moderation_sign_in': 'Sign in to use this feature.',
+      'cancel': 'Cancel',
       'edit_profile': 'Edit Profile',
       'edit_profile_name_label': 'Full Name',
       'edit_profile_name_hint': 'Enter your full name',
@@ -963,10 +1031,12 @@ class AppLanguage extends ChangeNotifier {
       'aj_submit': 'Proceed to Payment & Publish',
       'pj_checkout': 'Job Checkout',
       'pj_options': 'Listing options',
-      'pj_options_sub': 'Choose a package before completing the Epoint payment.',
+      'pj_options_sub':
+          'Choose a package before completing the Epoint payment.',
       'pj_standard': 'Standard Listing',
       'pj_premium': 'Premium Listing',
-      'pj_standard_desc': '10 AZN - Publish your vacancy with standard visibility.',
+      'pj_standard_desc':
+          '10 AZN - Publish your vacancy with standard visibility.',
       'pj_premium_desc': '20 AZN - More visible listing with VIP priority.',
       'pj_summary': 'Order summary',
       'pj_amount': 'Amount',
@@ -975,7 +1045,8 @@ class AppLanguage extends ChangeNotifier {
       'pj_description': 'Description',
       'pj_pay': 'Pay with Epoint',
       'pj_waiting': 'Awaiting payment',
-      'pj_waiting_sub': 'Complete the payment on the Epoint page. The listing will be published automatically after confirmation.',
+      'pj_waiting_sub':
+          'Complete the payment on the Epoint page. The listing will be published automatically after confirmation.',
       'pj_check': 'Check payment',
       'pj_success': 'Payment successful',
       'pj_success_sub': 'Your vacancy has been published successfully.',
