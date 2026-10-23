@@ -363,6 +363,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
       'longitude': resolvedLocation.longitude,
       'has_vacancy': _hasVacancy,
       'is_vip': _isVip,
+      'user_id': Supabase.instance.client.auth.currentUser?.id,
       'owner_id': Supabase.instance.client.auth.currentUser?.id,
       'created_by': Supabase.instance.client.auth.currentUser?.id,
       'ad_status': 'pending',

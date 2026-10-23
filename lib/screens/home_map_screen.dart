@@ -511,7 +511,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   String? _jobEmployerId(Map<String, dynamic> job) {
-    final value = job['owner_id'] ?? job['created_by'];
+    final value = job['owner_id'] ?? job['created_by'] ?? job['user_id'];
     final employerId = value?.toString().trim();
     return employerId == null || employerId.isEmpty ? null : employerId;
   }
