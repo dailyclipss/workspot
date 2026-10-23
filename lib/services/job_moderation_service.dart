@@ -24,12 +24,17 @@ class JobModerationService {
       throw StateError('Sign in is required to report a job.');
     }
 
-    await _client.from('job_reports').insert({
-      'job_id': jobId,
-      'reporter_id': userId,
-      'reason': reason,
-      'details': details,
-    });
+    try {
+      await _client.from('job_reports').insert({
+        'job_id': jobId,
+        'reporter_id': userId,
+        'reason': reason,
+        'details': details,
+      });
+    } on PostgrestException catch (error) {
+      // Already reported by this user; treat as success.
+      if (error.code != '23505') rethrow;
+    }
   }
 
   Future<void> blockEmployer(String employerId) async {

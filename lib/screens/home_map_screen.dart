@@ -1437,9 +1437,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         ),
       ),
     );
-    final details = detailsController.text.trim();
-    detailsController.dispose();
     if (report == null) return;
+    final details = report['details'] ?? '';
 
     try {
       await _moderationService.reportJob(
