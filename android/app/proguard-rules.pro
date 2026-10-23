@@ -1,4 +1,8 @@
 -keep class androidx.work.** { *; }
 -keep class androidx.room.** { *; }
+-keep class androidx.startup.** { *; }
 -keep class * extends androidx.room.RoomDatabase { *; }
+-keep class com.google.android.gms.ads.** { *; }
+-keep class io.flutter.** { *; }
 -dontwarn androidx.work.**
+-dontwarn com.google.android.play.core.**
