@@ -43,6 +43,9 @@ android {
 
     buildTypes {
         release {
+            // R8 stripped WorkManager/Room classes and crashed the app on launch.
+            isMinifyEnabled = false
+            isShrinkResources = false
             // Falls back to debug keys locally when no CI keystore is provided.
             signingConfig = if (System.getenv("CM_KEYSTORE_PATH") != null)
                 signingConfigs.getByName("release")
