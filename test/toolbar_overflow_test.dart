@@ -1,15 +1,19 @@
-// Verifies the HomeMapScreen top toolbar never overflows the screen width.
+// Verifies the HomeMapScreen toolbar layout never overflows and never overlaps.
 //
-// New layout: Row 1 = search field (Expanded) + filter icon. Row 2 = category
-// chips (Expanded, scrollable) + action row (bell, add-job, account, settings).
-// We render both rows at 320/360/375/390/430 in light and dark themes and
-// assert no RenderFlex overflow and that the "Daxil ol" label is present.
+// Layout under test (mirrors HomeMapScreen):
+//   Row 1: search field (Expanded) + filter icon.
+//   Row 2 (own line): bell, add-job, labeled "Daxil ol" pill (Expanded),
+//         settings gear pinned right.
+//   Row 3: category chips (horizontally scrollable, full width).
+// Asserts no RenderFlex overflow, "Daxil ol" is present for guests, and the
+// action row's rect does not overlap the chips row's rect.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Widget _toolbar({required bool isDark}) {
+Widget _buildToolbar({required bool isDark}) {
   final searchRow = Container(
+    key: const Key('searchRow'),
     height: 52,
     color: isDark ? const Color(0xFF1E293B) : Colors.white,
     child: Row(
@@ -32,58 +36,60 @@ Widget _toolbar({required bool isDark}) {
     ),
   );
 
-  final actionRow = Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.notifications_none_rounded),
-          onPressed: () {}),
-      IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.add_circle_outline_rounded),
-          onPressed: () {}),
-      TextButton.icon(
-        onPressed: () {},
-        icon: const Icon(Icons.login_rounded, size: 17),
-        label: const Text('Daxil ol'),
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  final actionRow = Padding(
+    key: const Key('actionRow'),
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+    child: Row(
+      children: [
+        IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () {}),
+        IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.add_circle_outline_rounded),
+            onPressed: () {}),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: TextButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.login_rounded, size: 18),
+              label: const Text('Daxil ol',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ),
         ),
-      ),
-      IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.settings_outlined),
-          onPressed: () {}),
-    ],
+        const SizedBox(width: 4),
+        IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {}),
+      ],
+    ),
   );
 
   final chipsRow = SizedBox(
+    key: const Key('chipsRow'),
     height: 42,
-    child: Row(
-      children: [
-        Expanded(
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: const [
-              Chip(label: Text('All')),
-              Chip(label: Text('IT')),
-              Chip(label: Text('Sales')),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(right: 4),
-          child: actionRow,
-        ),
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      children: const [
+        Chip(label: Text('Bütün Vakansiyalar')),
+        Chip(label: Text('Restoran & Kafeler')),
+        Chip(label: Text('İT & Proqramlaşdırma')),
       ],
     ),
   );
 
   return Column(
-    children: [searchRow, chipsRow],
+    children: [searchRow, actionRow, chipsRow],
   );
 }
 
@@ -101,14 +107,25 @@ void main() {
           MaterialApp(
             theme: isDark ? ThemeData.dark() : ThemeData.light(),
             home: Scaffold(
-              body: SafeArea(child: _toolbar(isDark: isDark)),
+              body: SafeArea(child: _buildToolbar(isDark: isDark)),
             ),
           ),
         );
         await tester.pumpAndSettle();
 
+        // No overflow.
         expect(tester.takeException(), isNull);
+        // Guest sign-in label is visible.
         expect(find.text('Daxil ol'), findsOneWidget);
+
+        // Action row and chips row must not overlap.
+        final actionRect = tester.getRect(find.byKey(const Key('actionRow')));
+        final chipsRect = tester.getRect(find.byKey(const Key('chipsRow')));
+        expect(
+          actionRect.bottom <= chipsRect.top,
+          isTrue,
+          reason: 'action row overlaps chips row at ${width.toInt()}px',
+        );
       });
     }
   }

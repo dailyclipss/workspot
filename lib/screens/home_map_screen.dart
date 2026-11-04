@@ -1389,33 +1389,38 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     }
 
     if (isSignedIn) {
-      return IconButton(
-        icon: const Icon(Icons.person_outline_rounded),
-        onPressed: open,
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: IconButton(
+          icon: const Icon(Icons.person_outline_rounded),
+          onPressed: open,
+        ),
       );
     }
 
+    // Guests get a clearly visible, full-width labeled button.
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: TextButton.icon(
         onPressed: open,
         icon: const Icon(Icons.login_rounded,
-            size: 17, color: Color(0xFF2563EB)),
+            size: 18, color: Color(0xFF2563EB)),
         label: Text(
           appLang.translate('auth_login'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Color(0xFF2563EB),
             fontWeight: FontWeight.w700,
-            fontSize: 13,
+            fontSize: 14,
           ),
         ),
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          backgroundColor: const Color(0xFF2563EB).withOpacity(0.10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          backgroundColor: const Color(0xFF2563EB).withOpacity(0.12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Color(0xFF2563EB), width: 1),
           ),
         ),
       ),
@@ -1730,6 +1735,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   child: Column(
                     children: [
                       _buildSearchBar(isDark),
+                      _buildActionRow(isDark),
                       if (_isFilterOpen) _buildFilterPanel(isDark),
                       _buildCategoryList(isDark),
                     ],
@@ -1825,58 +1831,65 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
   }
 
-  // Row 2 (right of the category chips): bell, add-job, account, settings.
-  Widget _buildActionButtons(bool isDark) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.notifications_none_rounded),
-          onPressed: () async {
-            if (!await _requireSignIn()) return;
-            if (!mounted) return;
-            await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-            );
-            if (mounted) await _fetchMapJobs();
-          },
-        ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.add_circle_outline_rounded,
-              color: Color(0xFF2563EB)),
-          onPressed: () async {
-            try {
-              if (!context.mounted) return;
+  // Action row on its OWN line, below the search bar and above the category
+  // chips: bell, add-job, the labeled sign-in/profile button (flexible, text
+  // never clipped), and the settings gear pinned to the right edge.
+  Widget _buildActionRow(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Row(
+        children: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () async {
               if (!await _requireSignIn()) return;
-              if (!context.mounted) return;
+              if (!mounted) return;
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const AddJobScreen()),
+                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
               );
-              if (!mounted || !context.mounted) return;
-              await _fetchMapJobs();
-            } catch (error) {
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                    content: Text(appLang.translateWithArgs(
-                        'job_screen_open_failed', {'message': '$error'}))),
-              );
-            }
-          },
-        ),
-        _buildAccountButton(),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          tooltip: appLang.translate('settings_title'),
-          icon: Icon(Icons.settings_outlined,
-              color: isDark ? Colors.grey[300] : Colors.grey[700]),
-          onPressed: _showSettingsSheet,
-        ),
-      ],
+              if (mounted) await _fetchMapJobs();
+            },
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.add_circle_outline_rounded,
+                color: Color(0xFF2563EB)),
+            onPressed: () async {
+              try {
+                if (!context.mounted) return;
+                if (!await _requireSignIn()) return;
+                if (!context.mounted) return;
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddJobScreen()),
+                );
+                if (!mounted || !context.mounted) return;
+                await _fetchMapJobs();
+              } catch (error) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(appLang.translateWithArgs(
+                          'job_screen_open_failed', {'message': '$error'}))),
+                );
+              }
+            },
+          ),
+          const SizedBox(width: 4),
+          // Labeled sign-in pill (guests) / profile icon (signed-in).
+          Expanded(child: _buildAccountButton()),
+          const SizedBox(width: 4),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: appLang.translate('settings_title'),
+            icon: Icon(Icons.settings_outlined,
+                color: isDark ? Colors.grey[300] : Colors.grey[700]),
+            onPressed: _showSettingsSheet,
+          ),
+        ],
+      ),
     );
   }
 
@@ -2060,46 +2073,34 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   Widget _buildCategoryList(bool isDark) {
     return SizedBox(
       height: 42,
-      child: Row(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _categories.length,
-              itemBuilder: (context, index) {
-                final category = _categories[index];
-                final isSelected = _selectedCategory == category;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    selected: isSelected,
-                    showCheckmark: false,
-                    label: Text(appLang.translate(category)),
-                    labelStyle: TextStyle(
-                      color: isSelected
-                          ? Colors.white
-                          : (isDark ? Colors.grey[300] : const Color(0xFF0F172A)),
-                      fontSize: 12,
-                    ),
-                    backgroundColor:
-                        isDark ? const Color(0xFF1E293B) : Colors.white,
-                    selectedColor: const Color(0xFF2563EB),
-                    onSelected: (_) async {
-                      setState(() => _selectedCategory = category);
-                      await _refreshVisibleJobMarkers();
-                    },
-                  ),
-                );
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _categories.length,
+        itemBuilder: (context, index) {
+          final category = _categories[index];
+          final isSelected = _selectedCategory == category;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              selected: isSelected,
+              showCheckmark: false,
+              label: Text(appLang.translate(category)),
+              labelStyle: TextStyle(
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? Colors.grey[300] : const Color(0xFF0F172A)),
+                fontSize: 12,
+              ),
+              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+              selectedColor: const Color(0xFF2563EB),
+              onSelected: (_) async {
+                setState(() => _selectedCategory = category);
+                await _refreshVisibleJobMarkers();
               },
             ),
-          ),
-          // Action buttons pinned to the right of the chips row.
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: _buildActionButtons(isDark),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
