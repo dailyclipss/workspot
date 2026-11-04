@@ -1399,17 +1399,19 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       child: TextButton.icon(
         onPressed: open,
         icon: const Icon(Icons.login_rounded,
-            size: 18, color: Color(0xFF2563EB)),
+            size: 17, color: Color(0xFF2563EB)),
         label: Text(
           appLang.translate('auth_login'),
           style: const TextStyle(
             color: Color(0xFF2563EB),
             fontWeight: FontWeight.w700,
-            fontSize: 14,
+            fontSize: 13,
           ),
         ),
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           backgroundColor: const Color(0xFF2563EB).withOpacity(0.10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -1782,79 +1784,93 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   ),
                 ],
         ),
-        child: Row(
-          children: [
-            const SizedBox(width: 14),
-            const Icon(Icons.search_rounded,
-                color: Color(0xFF2563EB), size: 22),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                onChanged: (_) async {
-                  setState(() {});
-                  await _refreshVisibleJobMarkers();
-                },
-                decoration: InputDecoration(
-                  hintText: appLang.translate('search_hint'),
-                  hintStyle: TextStyle(
-                      color: isDark ? Colors.grey[400] : Colors.grey[500]),
-                  border: InputBorder.none,
+        // Horizontally scrollable so every control stays reachable on narrow
+        // phones (320px) without overflowing the screen width.
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              const SizedBox(width: 14),
+              const Icon(Icons.search_rounded,
+                  color: Color(0xFF2563EB), size: 22),
+              const SizedBox(width: 8),
+              // Fixed-width search field (replaces Expanded, which cannot be
+              // used inside a horizontally scrollable row).
+              SizedBox(
+                width: 150,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (_) async {
+                    setState(() {});
+                    await _refreshVisibleJobMarkers();
+                  },
+                  decoration: InputDecoration(
+                    hintText: appLang.translate('search_hint'),
+                    hintStyle: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[500]),
+                    border: InputBorder.none,
+                  ),
                 ),
               ),
-            ),
-            IconButton(
-              icon: Icon(
-                _isFilterOpen
-                    ? Icons.filter_alt_rounded
-                    : Icons.filter_alt_outlined,
-                color:
-                    _isFilterOpen ? const Color(0xFF2563EB) : Colors.grey[700],
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  _isFilterOpen
+                      ? Icons.filter_alt_rounded
+                      : Icons.filter_alt_outlined,
+                  color: _isFilterOpen
+                      ? const Color(0xFF2563EB)
+                      : Colors.grey[700],
+                ),
+                onPressed: () => setState(() => _isFilterOpen = !_isFilterOpen),
               ),
-              onPressed: () => setState(() => _isFilterOpen = !_isFilterOpen),
-            ),
-            IconButton(
-              icon: const Icon(Icons.notifications_none_rounded),
-              onPressed: () async {
-                if (!await _requireSignIn()) return;
-                if (!mounted) return;
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const NotificationsScreen()),
-                );
-                if (mounted) await _fetchMapJobs();
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.add_circle_outline_rounded,
-                  color: Color(0xFF2563EB)),
-              onPressed: () async {
-                try {
-                  if (!context.mounted) return;
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.notifications_none_rounded),
+                onPressed: () async {
                   if (!await _requireSignIn()) return;
-                  if (!context.mounted) return;
+                  if (!mounted) return;
                   await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AddJobScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const NotificationsScreen()),
                   );
-                  if (!mounted || !context.mounted) return;
-                  await _fetchMapJobs();
-                } catch (error) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(appLang.translateWithArgs(
-                            'job_screen_open_failed', {'message': '$error'}))),
-                  );
-                }
-              },
-            ),
-            _buildAccountButton(),
-            const SizedBox(width: 4),
-            const LanguageThemeControls(),
-            const SizedBox(width: 4),
-          ],
+                  if (mounted) await _fetchMapJobs();
+                },
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.add_circle_outline_rounded,
+                    color: Color(0xFF2563EB)),
+                onPressed: () async {
+                  try {
+                    if (!context.mounted) return;
+                    if (!await _requireSignIn()) return;
+                    if (!context.mounted) return;
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AddJobScreen()),
+                    );
+                    if (!mounted || !context.mounted) return;
+                    await _fetchMapJobs();
+                  } catch (error) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content: Text(appLang.translateWithArgs(
+                              'job_screen_open_failed',
+                              {'message': '$error'}))),
+                    );
+                  }
+                },
+              ),
+              _buildAccountButton(),
+              const SizedBox(width: 4),
+              const LanguageThemeControls(),
+              const SizedBox(width: 8),
+            ],
+          ),
         ),
       ),
     );
