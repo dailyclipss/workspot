@@ -20,6 +20,7 @@ import '../services/location_service.dart';
 import '../services/job_location_resolver.dart';
 import '../services/job_moderation_service.dart';
 import 'add_job_screen.dart' hide LatLng;
+import 'auth_screen.dart';
 import 'company_details_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
@@ -1357,12 +1358,47 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     }
   }
 
+  /// Returns true when a user is signed in. Guests see a sign-in prompt with
+  /// a button that opens [AuthScreen]; on successful login they return to the
+  /// map and the job list refreshes.
+  Future<bool> _requireSignIn() async {
+    if (supabase.Supabase.instance.client.auth.currentUser != null) {
+      return true;
+    }
+    final signedIn = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(appLang.translate('auth_login')),
+        content: Text(appLang.translate('moderation_sign_in')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(appLang.translate('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(appLang.translate('auth_login')),
+          ),
+        ],
+      ),
+    );
+    if (signedIn != true || !mounted) return false;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+    );
+    final isSignedIn =
+        supabase.Supabase.instance.client.auth.currentUser != null;
+    if (isSignedIn && mounted) {
+      await _fetchMapJobs();
+    }
+    return isSignedIn;
+  }
+
   Future<void> _reportJob(Map<String, dynamic> job) async {
     final client = supabase.Supabase.instance.client;
     if (client.auth.currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(appLang.translate('moderation_sign_in'))),
-      );
+      await _requireSignIn();
       return;
     }
 
@@ -1466,9 +1502,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final employerId = _jobEmployerId(job);
     final userId = client.auth.currentUser?.id;
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(appLang.translate('moderation_sign_in'))),
-      );
+      await _requireSignIn();
       return;
     }
     if (employerId == null || employerId == userId) return;
@@ -1721,6 +1755,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             IconButton(
               icon: const Icon(Icons.notifications_none_rounded),
               onPressed: () async {
+                if (!await _requireSignIn()) return;
+                if (!mounted) return;
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -1734,6 +1770,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   color: Color(0xFF2563EB)),
               onPressed: () async {
                 try {
+                  if (!context.mounted) return;
+                  if (!await _requireSignIn()) return;
                   if (!context.mounted) return;
                   await Navigator.push(
                     context,
@@ -1754,9 +1792,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             IconButton(
               icon: const Icon(Icons.person_outline_rounded),
               onPressed: () async {
+                final isSignedIn =
+                    supabase.Supabase.instance.client.auth.currentUser != null;
                 await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => isSignedIn
+                        ? const ProfileScreen()
+                        : const AuthScreen(),
+                  ),
                 );
                 if (mounted) await _fetchMapJobs();
               },

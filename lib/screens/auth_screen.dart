@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show Platform;
+import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart' show LaunchMode;
 
 import '../services/app_language.dart';
 import '../services/theme_service.dart';
@@ -255,6 +260,17 @@ class _AuthScreenState extends State<AuthScreen>
   static const _oauthRedirectUri = 'com.example.workspot://login-callback/';
   static const _webOAuthRedirectUri = 'https://workspot.az';
   static const _genericAuthErrorMessage = 'Giriş zamanı xəta baş verdi';
+
+  /// iOS client ID used by the native Google Sign-In SDK on iOS.
+  static const _googleIosClientId =
+      '521027523855-f98co9ijt7rfru7g4cnr133hmu7rdila.apps.googleusercontent.com';
+
+  /// Web client ID registered for Google login in the Supabase dashboard.
+  static const _googleWebClientId =
+      '521027523855-mpifu4nhbct8brhdp9rs9eqcq4qb13tp.apps.googleusercontent.com';
+
+  /// True only on iOS devices (never on web, Android, or desktop).
+  static bool get _isNativeIos => !kIsWeb && Platform.isIOS;
   static const String _adminBypassPin = String.fromEnvironment(
     'WORKSPOT_ADMIN_BYPASS_PIN',
     defaultValue: '123456',
@@ -519,6 +535,10 @@ class _AuthScreenState extends State<AuthScreen>
 
     setState(() => _isLoadingGoogle = true);
     try {
+      if (_isNativeIos) {
+        await _handleGoogleAuthNativeIos();
+        return;
+      }
       debugPrint(
         'Starting Supabase Google OAuth with redirect URI: '
         '${kIsWeb ? _webOAuthRedirectUri : _oauthRedirectUri}',
@@ -638,6 +658,10 @@ class _AuthScreenState extends State<AuthScreen>
 
     setState(() => _isLoadingApple = true);
     try {
+      if (_isNativeIos) {
+        await _handleAppleAuthNativeIos();
+        return;
+      }
       const redirectTo = kIsWeb ? _webOAuthRedirectUri : _oauthRedirectUri;
       debugPrint('Starting Supabase Apple OAuth with redirect URI: $redirectTo');
       final launched = await Supabase.instance.client.auth.signInWithOAuth(
@@ -681,6 +705,112 @@ class _AuthScreenState extends State<AuthScreen>
         setState(() => _isLoadingApple = false);
       }
     }
+  }
+
+  /// Native Sign in with Apple on iOS: no external browser is opened, which
+  /// satisfies App Store Guideline 4. The raw nonce goes to Supabase, its
+  /// SHA-256 hash goes to Apple.
+  Future<void> _handleAppleAuthNativeIos() async {
+    try {
+      final rawNonce = _generateNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        throw const AuthException('Apple did not return an identity token.');
+      }
+
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+      // Navigation happens via the onAuthStateChange listener.
+    } on SignInWithAppleAuthorizationException catch (error) {
+      if (error.code == AuthorizationErrorCode.canceled) {
+        // User dismissed the Apple sheet: stay silent.
+        return;
+      }
+      debugPrint('Apple authorization failed: ${error.code} ${error.message}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(_genericAuthErrorMessage)),
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Native Apple sign-in failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(_genericAuthErrorMessage)),
+        );
+      }
+    }
+  }
+
+  /// Native Google Sign-In on iOS: no external browser is opened, which
+  /// satisfies App Store Guideline 4.
+  Future<void> _handleGoogleAuthNativeIos() async {
+    try {
+      final signIn = GoogleSignIn.instance;
+      await signIn.initialize(
+        clientId: _googleIosClientId,
+        serverClientId: _googleWebClientId,
+      );
+
+      final account = await signIn.authenticate();
+      final idToken = account.authentication.idToken;
+      if (idToken == null) {
+        throw const AuthException('Google did not return an ID token.');
+      }
+
+      final authorization =
+          await account.authorizationClient.authorizationForScopes(
+        const ['email', 'profile'],
+      );
+
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: authorization?.accessToken,
+      );
+      // Navigation happens via the onAuthStateChange listener.
+    } on GoogleSignInException catch (error) {
+      if (error.code == GoogleSignInExceptionCode.canceled) {
+        // User dismissed the Google sheet: stay silent.
+        return;
+      }
+      debugPrint('Google sign-in failed: ${error.code} ${error.description}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(_genericAuthErrorMessage)),
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Native Google sign-in failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(_genericAuthErrorMessage)),
+        );
+      }
+    }
+  }
+
+  static String _generateNonce([int length = 32]) {
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)])
+        .join();
   }
 
   Future<void> _handleGuestAuth() async {

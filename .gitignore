@@ -48,3 +48,15 @@ app.*.map.json
 .widget_preview/
 .vercel
 .env*
+
+# Local tooling / secrets (never commit)
+jwt_token.txt
+generate_jwt.js
+package.json
+package-lock.json
+node_modules/
+_icons/
+*.new
+*.p8
+*.pem
+AuthKey_*.p8

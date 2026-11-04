@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
 import '../services/app_language.dart';
 import '../services/admin_auth_service.dart';
-import 'auth_screen.dart';
 import 'home_map_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -541,9 +540,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       } catch (error) {
                         debugPrint('signOut failed: $error');
                       }
-                      // Arxadakı bütün ekranları silir və Giriş ekranına atır
+                      // Arxadakı bütün ekranları silir və qonaq rejimində xəritəyə atır
                       navigator.pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const AuthScreen()),
+                        MaterialPageRoute(builder: (_) => const HomeMapScreen()),
                         (Route<dynamic> route) => false,
                       );
                     },
@@ -599,7 +598,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await Supabase.instance.client.auth.signOut();
       } catch (_) {}
       navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        MaterialPageRoute(builder: (_) => const HomeMapScreen()),
         (Route<dynamic> route) => false,
       );
     } catch (error) {
