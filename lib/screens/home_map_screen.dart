@@ -157,6 +157,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   Set<Marker> _clusterMarkers = {};
   late final cm.ClusterManager<_JobClusterItem> _clusterManager;
   StreamSubscription<List<Map<String, dynamic>>>? _jobsSubscription;
+  StreamSubscription<supabase.AuthState>? _authStateSubscription;
   Timer? _jobsRefreshTimer;
   String? _selectedJobId;
   OverlayEntry? _jobDetailOverlayEntry;
@@ -190,6 +191,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       extraPercent: 0.20,
     );
     appLang.addListener(_onLanguageChanged);
+    // Rebuild the sign-in/profile entry whenever the auth state changes.
+    _authStateSubscription =
+        supabase.Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      if (mounted) setState(() {});
+    });
     if (!kIsWeb) {
       _loadBannerAd();
     }
@@ -237,6 +243,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     appLang.removeListener(_onLanguageChanged);
     _bannerAd?.dispose();
     _jobsSubscription?.cancel();
+    _authStateSubscription?.cancel();
     _jobsRefreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -1358,6 +1365,56 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     }
   }
 
+  /// Account entry in the top bar: a clearly visible "Daxil ol" button for
+  /// guests, or the profile icon for signed-in users. Reuses the single
+  /// auth-state check; rebuilds automatically via [_authStateSubscription].
+  Widget _buildAccountButton() {
+    final isSignedIn =
+        supabase.Supabase.instance.client.auth.currentUser != null;
+
+    Future<void> open() async {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              isSignedIn ? const ProfileScreen() : const AuthScreen(),
+        ),
+      );
+      if (mounted) await _fetchMapJobs();
+    }
+
+    if (isSignedIn) {
+      return IconButton(
+        icon: const Icon(Icons.person_outline_rounded),
+        onPressed: open,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: TextButton.icon(
+        onPressed: open,
+        icon: const Icon(Icons.login_rounded,
+            size: 18, color: Color(0xFF2563EB)),
+        label: Text(
+          appLang.translate('auth_login'),
+          style: const TextStyle(
+            color: Color(0xFF2563EB),
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+        ),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          backgroundColor: const Color(0xFF2563EB).withOpacity(0.10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Returns true when a user is signed in. Guests see a sign-in prompt with
   /// a button that opens [AuthScreen]; on successful login they return to the
   /// map and the job list refreshes.
@@ -1789,22 +1846,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 }
               },
             ),
-            IconButton(
-              icon: const Icon(Icons.person_outline_rounded),
-              onPressed: () async {
-                final isSignedIn =
-                    supabase.Supabase.instance.client.auth.currentUser != null;
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => isSignedIn
-                        ? const ProfileScreen()
-                        : const AuthScreen(),
-                  ),
-                );
-                if (mounted) await _fetchMapJobs();
-              },
-            ),
+            _buildAccountButton(),
             const SizedBox(width: 4),
           ],
         ),
