@@ -12,11 +12,19 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  static const _background = Color(0xFFF8FAFC);
-  static const _surface = Colors.white;
   static const _primary = Color(0xFF2563EB);
-  static const _text = Color(0xFF0F172A);
-  static const _muted = Color(0xFF64748B);
+
+  Color get _background => Theme.of(context).scaffoldBackgroundColor;
+  Color get _surface => Theme.of(context).colorScheme.surface;
+  Color get _text => Theme.of(context).colorScheme.onSurface;
+  Color get _muted => Theme.of(context).colorScheme.onSurfaceVariant;
+  Color get _unreadSurface => Theme.of(context).brightness == Brightness.dark
+      ? _primary.withValues(alpha: 0.16)
+      : const Color(0xFFEFF6FF);
+  Color get _cardBorder => Theme.of(context).colorScheme.outlineVariant;
+  Color get _unreadBorder => Theme.of(context).brightness == Brightness.dark
+      ? _primary.withValues(alpha: 0.5)
+      : const Color(0xFFBFDBFE);
 
   int _selectedFilterIndex = 0;
   final Set<String> _optimisticallyReadIds = <String>{};
@@ -316,7 +324,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               width: 104,
               height: 104,
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
+                color: _unreadSurface,
                 borderRadius: BorderRadius.circular(32),
               ),
               child: const Icon(
@@ -329,7 +337,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             Text(
               appLang.translate('notifications_empty'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: _text,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
@@ -341,7 +349,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ? appLang.translate('notifications_unread_empty')
                   : appLang.translate('notifications_empty_subtitle'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _muted, fontSize: 13, height: 1.4),
+              style: TextStyle(color: _muted, fontSize: 13, height: 1.4),
             ),
           ],
         ),
@@ -367,9 +375,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isRead ? _surface : const Color(0xFFEFF6FF),
+          color: isRead ? _surface : _unreadSurface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: isRead ? const Color(0xFFE2E8F0) : const Color(0xFFBFDBFE)),
+          border: Border.all(color: isRead ? _cardBorder : _unreadBorder),
           boxShadow: [
             if (!isRead)
               BoxShadow(
@@ -416,14 +424,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       const SizedBox(width: 8),
                       Text(
                         timeLabel,
-                        style: const TextStyle(color: _muted, fontSize: 11),
+                        style: TextStyle(color: _muted, fontSize: 11),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
                     message,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: _muted,
                       fontSize: 13,
                       height: 1.45,

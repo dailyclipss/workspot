@@ -481,15 +481,16 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: scheme.surface,
       appBar: AppBar(
         title: Text(
           appLang.translate('add_vacancy'),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
         elevation: 0.5,
       ),
       body: SingleChildScrollView(
@@ -517,6 +518,9 @@ class _AddJobScreenState extends State<AddJobScreen> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedCategory,
+                    dropdownColor: scheme.surface,
+                    iconEnabledColor: scheme.onSurfaceVariant,
+                    style: TextStyle(color: scheme.onSurface, fontSize: 15),
                     decoration: _fieldDecoration(appLang.translate('aj_category'), appLang.translate('aj_category_hint'), Icons.category_rounded),
                     items: [
                       for (var i = 0; i < _categories.length; i++)
@@ -531,6 +535,9 @@ class _AddJobScreenState extends State<AddJobScreen> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedDistrict,
+                    dropdownColor: scheme.surface,
+                    iconEnabledColor: scheme.onSurfaceVariant,
+                    style: TextStyle(color: scheme.onSurface, fontSize: 15),
                     decoration: _fieldDecoration(appLang.translate('aj_district'), appLang.translate('aj_district_hint'), Icons.location_city_rounded),
                     items: [
                       for (var i = 0; i < _districts.length; i++)
@@ -613,6 +620,9 @@ class _AddJobScreenState extends State<AddJobScreen> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedSchedule,
+                    dropdownColor: scheme.surface,
+                    iconEnabledColor: scheme.onSurfaceVariant,
+                    style: TextStyle(color: scheme.onSurface, fontSize: 15),
                     decoration: _fieldDecoration(appLang.translate('aj_schedule'), appLang.translate('aj_schedule_hint'), Icons.schedule_rounded),
                     items: [
                       for (var i = 0; i < _schedules.length; i++)
@@ -671,9 +681,9 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     Container(
                       margin: const EdgeInsets.only(top: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: scheme.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        border: Border.all(color: scheme.outlineVariant),
                         boxShadow: [
                           BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 4)),
                         ],
@@ -688,7 +698,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                                 suggestion.displayName,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 13.5),
+                                style: TextStyle(fontSize: 13.5, color: scheme.onSurface),
                               ),
                               onTap: () => _selectSuggestion(suggestion),
                             ),
@@ -772,21 +782,24 @@ class _AddJobScreenState extends State<AddJobScreen> {
   }
 
   InputDecoration _fieldDecoration(String label, String hint, IconData icon) {
+    final scheme = Theme.of(context).colorScheme;
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon),
+      labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+      hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+      prefixIcon: Icon(icon, color: scheme.onSurfaceVariant),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        borderSide: BorderSide(color: scheme.outlineVariant),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.4),
       ),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: scheme.surfaceContainerHighest.withOpacity(0.4),
     );
   }
 
@@ -795,10 +808,11 @@ class _AddJobScreenState extends State<AddJobScreen> {
     required IconData icon,
     required List<Widget> children,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
           BoxShadow(color: Color(0x0F000000), blurRadius: 18, offset: Offset(0, 6)),
@@ -819,7 +833,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                 child: Icon(icon, color: const Color(0xFF2563EB), size: 19),
               ),
               const SizedBox(width: 10),
-              Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+              Text(title, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: scheme.onSurface)),
             ],
           ),
           const SizedBox(height: 14),

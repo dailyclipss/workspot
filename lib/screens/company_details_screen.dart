@@ -72,13 +72,14 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: scheme.surface,
       appBar: AppBar(
         title: Text(widget.companyName,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
         elevation: 0.5,
       ),
       body: SingleChildScrollView(
@@ -90,7 +91,7 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: scheme.surface,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
@@ -117,10 +118,10 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
                   const SizedBox(height: 12),
                   Text(
                     widget.companyName,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A)),
+                        color: scheme.onSurface),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -129,13 +130,15 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
                       const Icon(Icons.star_rounded,
                           color: Colors.amber, size: 20),
                       const SizedBox(width: 4),
-                      const Text('4.8',
+                      Text('4.8',
                           style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14)),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: scheme.onSurface)),
                       const SizedBox(width: 4),
                       Text('(${_reviews.length} rəy)',
-                          style:
-                              TextStyle(color: Colors.grey[600], fontSize: 13)),
+                          style: TextStyle(
+                              color: scheme.onSurfaceVariant, fontSize: 13)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -163,10 +166,10 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
             // Şirkətin Aktiv Vakansiyaları
             Text(
               'Aktiv Vakansiyalar (${widget.companyJobs.length})',
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A)),
+                  color: scheme.onSurface),
             ),
             const SizedBox(height: 12),
             widget.companyJobs.isEmpty
@@ -174,13 +177,13 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
                     padding: const EdgeInsets.all(20),
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: scheme.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
+                      border: Border.all(color: scheme.outlineVariant),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text('Bu şirkətin hazırda aktiv elanı yoxdur.',
-                          style: TextStyle(color: Colors.grey)),
+                          style: TextStyle(color: scheme.onSurfaceVariant)),
                     ),
                   )
                 : ListView.builder(
@@ -286,12 +289,12 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
             const SizedBox(height: 24),
 
             // Rəylər və Reytinqlər Bölməsi
-            const Text(
+            Text(
               'İşçi Rəyləri və Reytinq',
               style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A)),
+                  color: scheme.onSurface),
             ),
             const SizedBox(height: 12),
 
@@ -299,16 +302,18 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: scheme.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border.all(color: scheme.outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Rəyiniz var? Şirkəti qiymətləndirin:',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  Text('Rəyiniz var? Şirkəti qiymətləndirin:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: scheme.onSurface)),
                   const SizedBox(height: 8),
                   Row(
                     children: List.generate(5, (index) {
@@ -328,9 +333,11 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
                   ),
                   TextField(
                     controller: _reviewController,
+                    style: TextStyle(color: scheme.onSurface, fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Şirkət haqqında təcrübənizi yazın...',
-                      hintStyle: const TextStyle(fontSize: 13),
+                      hintStyle:
+                          TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
@@ -368,9 +375,9 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(color: scheme.outlineVariant),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,29 +386,32 @@ class _CompanyDetailsScreenState extends State<CompanyDetailsScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(review['name'],
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 14)),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: scheme.onSurface)),
                           Row(
                             children: [
                               const Icon(Icons.star_rounded,
                                   color: Colors.amber, size: 16),
                               const SizedBox(width: 2),
                               Text('${review['rating']}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12)),
+                                      fontSize: 12,
+                                      color: scheme.onSurface)),
                             ],
                           ),
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(review['comment'],
-                          style:
-                              TextStyle(color: Colors.grey[800], fontSize: 13)),
+                          style: TextStyle(
+                              color: scheme.onSurfaceVariant, fontSize: 13)),
                       const SizedBox(height: 4),
                       Text(review['date'],
-                          style:
-                              TextStyle(color: Colors.grey[500], fontSize: 11)),
+                          style: TextStyle(
+                              color: scheme.onSurfaceVariant, fontSize: 11)),
                     ],
                   ),
                 );
