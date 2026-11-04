@@ -14,7 +14,10 @@ const Map<String, String> kLanguageLabels = {
 /// ProfileScreen so guests can change language/theme without signing in.
 /// Reuses [themeService] and [appLang]; no logic is duplicated.
 class LanguageThemeControls extends StatelessWidget {
-  const LanguageThemeControls({super.key});
+  const LanguageThemeControls({super.key, this.compact = false});
+
+  /// When true, renders without the card container (for use inside a sheet).
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +25,62 @@ class LanguageThemeControls extends StatelessWidget {
       animation: Listenable.merge([themeService, appLang]),
       builder: (context, _) {
         final isDark = themeService.isDarkMode;
+        final row = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: isDark
+                  ? appLang.translate('auth_light_mode')
+                  : appLang.translate('auth_dark_mode'),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              onPressed: themeService.toggleTheme,
+              icon: Icon(
+                isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                color: isDark ? Colors.amber.shade200 : const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              width: 1,
+              height: 22,
+              color: isDark ? Colors.white12 : const Color(0x1A0F172A),
+            ),
+            const SizedBox(width: 8),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: appLang.currentLanguage,
+                isDense: true,
+                icon: Icon(
+                  Icons.expand_more_rounded,
+                  size: 18,
+                  color: isDark ? Colors.white70 : const Color(0xFF0F172A),
+                ),
+                borderRadius: BorderRadius.circular(14),
+                dropdownColor: isDark ? const Color(0xFF111827) : Colors.white,
+                style: TextStyle(
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+                items: kLanguageLabels.entries
+                    .map(
+                      (entry) => DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  appLang.changeLanguage(value);
+                },
+              ),
+            ),
+          ],
+        );
+        if (compact) return row;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
@@ -36,63 +95,7 @@ class LanguageThemeControls extends StatelessWidget {
                   color: Colors.black12, blurRadius: 16, offset: Offset(0, 6)),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: isDark
-                    ? appLang.translate('auth_light_mode')
-                    : appLang.translate('auth_dark_mode'),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                onPressed: themeService.toggleTheme,
-                icon: Icon(
-                  isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                  color:
-                      isDark ? Colors.amber.shade200 : const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                width: 1,
-                height: 22,
-                color: isDark ? Colors.white12 : const Color(0x1A0F172A),
-              ),
-              const SizedBox(width: 8),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: appLang.currentLanguage,
-                  isDense: true,
-                  icon: Icon(
-                    Icons.expand_more_rounded,
-                    size: 18,
-                    color: isDark ? Colors.white70 : const Color(0xFF0F172A),
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  dropdownColor:
-                      isDark ? const Color(0xFF111827) : Colors.white,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                  items: kLanguageLabels.entries
-                      .map(
-                        (entry) => DropdownMenuItem<String>(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    appLang.changeLanguage(value);
-                  },
-                ),
-              ),
-            ],
-          ),
+          child: row,
         );
       },
     );

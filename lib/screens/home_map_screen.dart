@@ -19,6 +19,7 @@ import '../services/app_language.dart';
 import '../services/location_service.dart';
 import '../services/job_location_resolver.dart';
 import '../services/job_moderation_service.dart';
+import '../services/theme_service.dart';
 import 'add_job_screen.dart' hide LatLng;
 import 'auth_screen.dart';
 import 'company_details_screen.dart';
@@ -1760,6 +1761,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
   }
 
+  // Row 1: search field (shrinks without overflow) + filter icon.
   Widget _buildSearchBar(bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1784,95 +1786,147 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   ),
                 ],
         ),
-        // Horizontally scrollable so every control stays reachable on narrow
-        // phones (320px) without overflowing the screen width.
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
-            children: [
-              const SizedBox(width: 14),
-              const Icon(Icons.search_rounded,
-                  color: Color(0xFF2563EB), size: 22),
-              const SizedBox(width: 8),
-              // Fixed-width search field (replaces Expanded, which cannot be
-              // used inside a horizontally scrollable row).
-              SizedBox(
-                width: 150,
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (_) async {
-                    setState(() {});
-                    await _refreshVisibleJobMarkers();
-                  },
-                  decoration: InputDecoration(
-                    hintText: appLang.translate('search_hint'),
-                    hintStyle: TextStyle(
-                        color: isDark ? Colors.grey[400] : Colors.grey[500]),
-                    border: InputBorder.none,
-                  ),
+        child: Row(
+          children: [
+            const SizedBox(width: 14),
+            const Icon(Icons.search_rounded,
+                color: Color(0xFF2563EB), size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                onChanged: (_) async {
+                  setState(() {});
+                  await _refreshVisibleJobMarkers();
+                },
+                decoration: InputDecoration(
+                  hintText: appLang.translate('search_hint'),
+                  hintStyle: TextStyle(
+                      color: isDark ? Colors.grey[400] : Colors.grey[500]),
+                  border: InputBorder.none,
                 ),
               ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  _isFilterOpen
-                      ? Icons.filter_alt_rounded
-                      : Icons.filter_alt_outlined,
-                  color: _isFilterOpen
-                      ? const Color(0xFF2563EB)
-                      : Colors.grey[700],
-                ),
-                onPressed: () => setState(() => _isFilterOpen = !_isFilterOpen),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                _isFilterOpen
+                    ? Icons.filter_alt_rounded
+                    : Icons.filter_alt_outlined,
+                color:
+                    _isFilterOpen ? const Color(0xFF2563EB) : Colors.grey[700],
               ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.notifications_none_rounded),
-                onPressed: () async {
-                  if (!await _requireSignIn()) return;
-                  if (!mounted) return;
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const NotificationsScreen()),
-                  );
-                  if (mounted) await _fetchMapJobs();
-                },
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.add_circle_outline_rounded,
-                    color: Color(0xFF2563EB)),
-                onPressed: () async {
-                  try {
-                    if (!context.mounted) return;
-                    if (!await _requireSignIn()) return;
-                    if (!context.mounted) return;
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AddJobScreen()),
-                    );
-                    if (!mounted || !context.mounted) return;
-                    await _fetchMapJobs();
-                  } catch (error) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(appLang.translateWithArgs(
-                              'job_screen_open_failed',
-                              {'message': '$error'}))),
-                    );
-                  }
-                },
-              ),
-              _buildAccountButton(),
-              const SizedBox(width: 4),
-              const LanguageThemeControls(),
-              const SizedBox(width: 8),
-            ],
-          ),
+              onPressed: () => setState(() => _isFilterOpen = !_isFilterOpen),
+            ),
+            const SizedBox(width: 4),
+          ],
         ),
       ),
+    );
+  }
+
+  // Row 2 (right of the category chips): bell, add-job, account, settings.
+  Widget _buildActionButtons(bool isDark) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.notifications_none_rounded),
+          onPressed: () async {
+            if (!await _requireSignIn()) return;
+            if (!mounted) return;
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            );
+            if (mounted) await _fetchMapJobs();
+          },
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.add_circle_outline_rounded,
+              color: Color(0xFF2563EB)),
+          onPressed: () async {
+            try {
+              if (!context.mounted) return;
+              if (!await _requireSignIn()) return;
+              if (!context.mounted) return;
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddJobScreen()),
+              );
+              if (!mounted || !context.mounted) return;
+              await _fetchMapJobs();
+            } catch (error) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text(appLang.translateWithArgs(
+                        'job_screen_open_failed', {'message': '$error'}))),
+              );
+            }
+          },
+        ),
+        _buildAccountButton(),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: appLang.translate('settings_title'),
+          icon: Icon(Icons.settings_outlined,
+              color: isDark ? Colors.grey[300] : Colors.grey[700]),
+          onPressed: _showSettingsSheet,
+        ),
+      ],
+    );
+  }
+
+  // Small bottom sheet with the theme toggle and language selector.
+  void _showSettingsSheet() {
+    final isDark = themeService.isDarkMode;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF64748B),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      appLang.translate('select_language'),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const LanguageThemeControls(compact: true),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2006,34 +2060,46 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   Widget _buildCategoryList(bool isDark) {
     return SizedBox(
       height: 42,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final category = _categories[index];
-          final isSelected = _selectedCategory == category;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              selected: isSelected,
-              showCheckmark: false,
-              label: Text(appLang.translate(category)),
-              labelStyle: TextStyle(
-                color: isSelected
-                    ? Colors.white
-                    : (isDark ? Colors.grey[300] : const Color(0xFF0F172A)),
-                fontSize: 12,
-              ),
-              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-              selectedColor: const Color(0xFF2563EB),
-              onSelected: (_) async {
-                setState(() => _selectedCategory = category);
-                await _refreshVisibleJobMarkers();
+      child: Row(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _categories.length,
+              itemBuilder: (context, index) {
+                final category = _categories[index];
+                final isSelected = _selectedCategory == category;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    selected: isSelected,
+                    showCheckmark: false,
+                    label: Text(appLang.translate(category)),
+                    labelStyle: TextStyle(
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark ? Colors.grey[300] : const Color(0xFF0F172A)),
+                      fontSize: 12,
+                    ),
+                    backgroundColor:
+                        isDark ? const Color(0xFF1E293B) : Colors.white,
+                    selectedColor: const Color(0xFF2563EB),
+                    onSelected: (_) async {
+                      setState(() => _selectedCategory = category);
+                      await _refreshVisibleJobMarkers();
+                    },
+                  ),
+                );
               },
             ),
-          );
-        },
+          ),
+          // Action buttons pinned to the right of the chips row.
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: _buildActionButtons(isDark),
+          ),
+        ],
       ),
     );
   }
