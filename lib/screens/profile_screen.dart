@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
 import '../services/app_language.dart';
 import '../services/admin_auth_service.dart';
+import '../widgets/language_theme_controls.dart';
 import 'home_map_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -293,8 +294,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     const maxFileSize = 10 * 1024 * 1024;
     if ((await file.length() ?? 0) > maxFileSize) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('CV faylının həcmi 10 MB-dan çox ola bilməz.'),
+        SnackBar(
+          content: Text(appLang.translate('cv_too_large')),
           backgroundColor: Colors.red,
         ),
       );
@@ -305,7 +306,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bytes = user == null ? null : await file.readAsBytes();
     if (!mounted) return;
     if (user == null || bytes == null) {
-      _showUploadMessage('CV yükləmək üçün hesaba daxil olun.', isError: true);
+      _showUploadMessage(appLang.translate('cv_sign_in_required'),
+          isError: true);
       return;
     }
 
@@ -341,11 +343,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isUploadingCv = false;
       });
       Navigator.pop(context);
-      _showUploadMessage('CV faylı uğurla yükləndi və yeniləndi!');
+      _showUploadMessage(appLang.translate('cv_upload_success'));
     } catch (error) {
       if (!mounted) return;
       setState(() => _isUploadingCv = false);
-      _showUploadMessage('CV yüklənmədi: $error', isError: true);
+      _showUploadMessage(
+          appLang.translateWithArgs('cv_upload_failed', {'message': '$error'}),
+          isError: true);
     }
   }
 
@@ -361,7 +365,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
-        _showUploadMessage('Şəkil yükləmək üçün hesaba daxil olun.',
+        _showUploadMessage(appLang.translate('avatar_sign_in_required'),
             isError: true);
         return;
       }
@@ -388,11 +392,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _profileImageUrl = publicUrl;
         _isUploadingProfileImage = false;
       });
-      _showUploadMessage('Profil şəkli uğurla yeniləndi!');
+      _showUploadMessage(appLang.translate('avatar_upload_success'));
     } catch (error) {
       if (!mounted) return;
       setState(() => _isUploadingProfileImage = false);
-      _showUploadMessage('Profil şəkli yüklənmədi: $error', isError: true);
+      _showUploadMessage(
+          appLang
+              .translateWithArgs('avatar_upload_failed', {'message': '$error'}),
+          isError: true);
     }
   }
 
@@ -501,6 +508,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Divider(color: _line),
 
+                  // Dil və tema seçimi (qonaqlar üçün də əlçatandır)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(appLang.translate('select_language'),
+                            style: TextStyle(
+                                color: _text,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
+                        const LanguageThemeControls(),
+                      ],
+                    ),
+                  ),
+                  Divider(color: _line),
+
                   if (_isAdminUser) ...[
                     ListTile(
                       leading: const Icon(Icons.dashboard_rounded,
@@ -550,8 +574,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(
                     leading: const Icon(Icons.delete_forever_rounded,
                         color: Colors.red),
-                    title: const Text('Hesabı sil',
-                        style: TextStyle(
+                    title: Text(appLang.translate('delete_account'),
+                        style: const TextStyle(
                             color: Colors.red,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
@@ -573,17 +597,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Hesabı sil'),
-        content: const Text(
-            'Hesabınız, profiliniz, CV-niz və bütün məlumatlarınız həmişəlik silinəcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.'),
+        title: Text(appLang.translate('delete_account')),
+        content: Text(appLang.translate('delete_account_confirm')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Ləğv et'),
+            child: Text(appLang.translate('cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sil', style: TextStyle(color: Colors.red)),
+            child: Text(appLang.translate('delete'),
+                style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -604,9 +628,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (error) {
       debugPrint('delete account failed: $error');
       messenger.showSnackBar(
-        const SnackBar(
-          content:
-              Text('Hesabı silmək alınmadı. Bir az sonra yenidən cəhd edin.'),
+        SnackBar(
+          content: Text(appLang.translate('delete_account_failed')),
           backgroundColor: Colors.red,
         ),
       );
@@ -628,7 +651,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Rəqəmsal CV-ni Yenilə',
+              Text(appLang.translate('cv_update_title'),
                   style: TextStyle(
                       fontSize: 18, fontWeight: FontWeight.bold, color: _text)),
               const SizedBox(height: 8),
@@ -661,12 +684,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : const Icon(Icons.cloud_upload_outlined,
                               size: 40, color: Color(0xFF2563EB)),
                       SizedBox(height: 8),
-                      Text('PDF faylı seçin',
-                          style: TextStyle(
+                      Text(appLang.translate('cv_pick_pdf'),
+                          style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF2563EB))),
-                      SizedBox(height: 4),
-                      Text('Maksimum fayl həcmi: 10 MB',
+                      const SizedBox(height: 4),
+                      Text(appLang.translate('cv_max_size'),
                           style: TextStyle(fontSize: 11, color: _muted)),
                     ],
                   ),

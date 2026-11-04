@@ -25,6 +25,7 @@ import 'company_details_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import '../utils/contact_utils.dart';
+import '../widgets/language_theme_controls.dart';
 
 class _CategoryMeta {
   final Color color;
@@ -349,7 +350,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       await _refreshVisibleJobMarkers();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Elanlar yüklənmədi: $error')),
+        SnackBar(
+            content: Text(appLang
+                .translateWithArgs('jobs_load_failed', {'message': '$error'}))),
       );
     }
 
@@ -1335,13 +1338,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     try {
       final jobId = job['id']?.toString();
       if (jobId == null || jobId.isEmpty) {
-        throw Exception('Vakansiya məlumatı tapılmadı');
+        throw Exception(appLang.translate('job_data_not_found'));
       }
       if (await _applicationService.hasAlreadyApplied(jobId)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Bu vakansiyaya artıq müraciət etmisiniz.')),
+          SnackBar(
+              content: Text(appLang.translate('job_already_applied'))),
         );
         return;
       }
@@ -1358,7 +1361,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Müraciət göndərilmədi: $error'),
+          content: Text(appLang
+              .translateWithArgs('job_apply_failed', {'message': '$error'})),
           backgroundColor: Colors.red,
         ),
       );
@@ -1840,13 +1844,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                        content:
-                            Text('Vakansiya ekranı açıla bilmədi: $error')),
+                        content: Text(appLang.translateWithArgs(
+                            'job_screen_open_failed', {'message': '$error'}))),
                   );
                 }
               },
             ),
             _buildAccountButton(),
+            const SizedBox(width: 4),
+            const LanguageThemeControls(),
             const SizedBox(width: 4),
           ],
         ),
@@ -1953,7 +1959,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           ),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Yalnız təsdiqlənmiş elanlar'),
+            title: Text(appLang.translate('only_verified_jobs')),
             value: _showOnlyVerified,
             onChanged: (value) async {
               setState(() => _showOnlyVerified = value);
@@ -2036,7 +2042,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         _MapActionButton(
           heroTag: 'my_location',
           icon: Icons.my_location_rounded,
-          tooltip: 'Mövqeyim',
+          tooltip: appLang.translate('my_location'),
           onPressed: _recenterMyLocation,
           isActive: false,
         ),
@@ -2333,7 +2339,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Əlaqədar şəxs: ${_jobContactPerson(job)}',
+                    appLang.translateWithArgs(
+                        'contact_person', {'name': _jobContactPerson(job)}),
                     style: const TextStyle(
                         color: Color(0xFF94A3B8), fontSize: 12.5),
                   ),

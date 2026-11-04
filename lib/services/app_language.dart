@@ -1,3 +1,5 @@
+import 'dart:ui' as ui show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,15 +13,25 @@ class AppLanguage extends ChangeNotifier {
   String get currentLanguage => _currentLanguage;
 
   /// Restores the language the user picked on this device (survives the
-  /// full-page reload caused by the Google OAuth redirect on web).
+  /// full-page reload caused by the Google OAuth redirect on web). A saved
+  /// preference always wins; otherwise the device language is used
+  /// (Azerbaijani for az devices, English otherwise).
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getString(_prefKey);
-      if (saved != null &&
-          supported.contains(saved) &&
-          saved != _currentLanguage) {
-        _currentLanguage = saved;
+      if (saved != null && supported.contains(saved)) {
+        if (saved != _currentLanguage) {
+          _currentLanguage = saved;
+          notifyListeners();
+        }
+        return;
+      }
+      final deviceLanguage =
+          ui.PlatformDispatcher.instance.locale.languageCode.toLowerCase();
+      final initial = deviceLanguage == 'az' ? 'az' : 'en';
+      if (initial != _currentLanguage) {
+        _currentLanguage = initial;
         notifyListeners();
       }
     } catch (e) {
@@ -401,6 +413,42 @@ class AppLanguage extends ChangeNotifier {
       'aj_sch_1': 'Növbəli',
       'aj_sch_2': 'Sərbəst',
       'aj_sch_3': 'Tələbələr üçün',
+      // Auth errors
+      'auth_error_generic': 'Giriş zamanı xəta baş verdi',
+      'auth_google_open_failed': 'Google giriş səhifəsi açıla bilmədi.',
+      'auth_google_failed': 'Google ilə giriş alınmadı: {message}',
+      'auth_google_unexpected':
+          'Google ilə giriş zamanı gözlənilməz xəta baş verdi.',
+      'auth_apple_open_failed': 'Apple giriş səhifəsi açıla bilmədi.',
+      'auth_apple_failed': 'Apple ilə giriş alınmadı: {message}',
+      'auth_apple_unexpected':
+          'Apple ilə giriş zamanı gözlənilməz xəta baş verdi.',
+      // Profile / account
+      'delete_account': 'Hesabı sil',
+      'delete_account_confirm':
+          'Hesabınız, profiliniz, CV-niz və bütün məlumatlarınız həmişəlik silinəcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.',
+      'delete': 'Sil',
+      'delete_account_failed':
+          'Hesabı silmək alınmadı. Bir az sonra yenidən cəhd edin.',
+      'cv_too_large': 'CV faylının həcmi 10 MB-dan çox ola bilməz.',
+      'cv_sign_in_required': 'CV yükləmək üçün hesaba daxil olun.',
+      'cv_upload_success': 'CV faylı uğurla yükləndi və yeniləndi!',
+      'cv_upload_failed': 'CV yüklənmədi: {message}',
+      'avatar_sign_in_required': 'Şəkil yükləmək üçün hesaba daxil olun.',
+      'avatar_upload_success': 'Profil şəkli uğurla yeniləndi!',
+      'avatar_upload_failed': 'Profil şəkli yüklənmədi: {message}',
+      'cv_update_title': 'Rəqəmsal CV-ni Yenilə',
+      'cv_pick_pdf': 'PDF faylı seçin',
+      'cv_max_size': 'Maksimum fayl həcmi: 10 MB',
+      // Map / jobs
+      'jobs_load_failed': 'Elanlar yüklənmədi: {message}',
+      'job_data_not_found': 'Vakansiya məlumatı tapılmadı',
+      'job_already_applied': 'Bu vakansiyaya artıq müraciət etmisiniz.',
+      'job_apply_failed': 'Müraciət göndərilmədi: {message}',
+      'job_screen_open_failed': 'Vakansiya ekranı açıla bilmədi: {message}',
+      'only_verified_jobs': 'Yalnız təsdiqlənmiş elanlar',
+      'my_location': 'Mövqeyim',
+      'contact_person': 'Əlaqədar şəxs: {name}',
     },
     'ru': {
       'app_title': 'WorkSpot',
@@ -744,6 +792,40 @@ class AppLanguage extends ChangeNotifier {
       'aj_sch_1': 'Сменный график',
       'aj_sch_2': 'Свободный график',
       'aj_sch_3': 'Для студентов',
+      // Auth errors
+      'auth_error_generic': 'Ошибка при входе',
+      'auth_google_open_failed': 'Не удалось открыть страницу входа Google.',
+      'auth_google_failed': 'Не удалось войти через Google: {message}',
+      'auth_google_unexpected': 'Произошла непредвиденная ошибка входа Google.',
+      'auth_apple_open_failed': 'Не удалось открыть страницу входа Apple.',
+      'auth_apple_failed': 'Не удалось войти через Apple: {message}',
+      'auth_apple_unexpected': 'Произошла непредвиденная ошибка входа Apple.',
+      // Profile / account
+      'delete_account': 'Удалить аккаунт',
+      'delete_account_confirm':
+          'Ваш аккаунт, профиль, резюме и все данные будут удалены навсегда. Это действие нельзя отменить.',
+      'delete': 'Удалить',
+      'delete_account_failed':
+          'Не удалось удалить аккаунт. Попробуйте позже.',
+      'cv_too_large': 'Размер файла резюме не может превышать 10 МБ.',
+      'cv_sign_in_required': 'Войдите в аккаунт, чтобы загрузить резюме.',
+      'cv_upload_success': 'Резюме успешно загружено и обновлено!',
+      'cv_upload_failed': 'Не удалось загрузить резюме: {message}',
+      'avatar_sign_in_required': 'Войдите в аккаунт, чтобы загрузить фото.',
+      'avatar_upload_success': 'Фото профиля успешно обновлено!',
+      'avatar_upload_failed': 'Не удалось загрузить фото: {message}',
+      'cv_update_title': 'Обновить цифровое резюме',
+      'cv_pick_pdf': 'Выберите PDF-файл',
+      'cv_max_size': 'Максимальный размер файла: 10 МБ',
+      // Map / jobs
+      'jobs_load_failed': 'Не удалось загрузить объявления: {message}',
+      'job_data_not_found': 'Данные о вакансии не найдены',
+      'job_already_applied': 'Вы уже откликнулись на эту вакансию.',
+      'job_apply_failed': 'Не удалось отправить отклик: {message}',
+      'job_screen_open_failed': 'Не удалось открыть экран вакансии: {message}',
+      'only_verified_jobs': 'Только проверенные объявления',
+      'my_location': 'Моё местоположение',
+      'contact_person': 'Контактное лицо: {name}',
     },
     'en': {
       'app_title': 'WorkSpot',
@@ -1084,6 +1166,42 @@ class AppLanguage extends ChangeNotifier {
       'aj_sch_1': 'Shift work',
       'aj_sch_2': 'Flexible',
       'aj_sch_3': 'For students',
+      // Auth errors
+      'auth_error_generic': 'An error occurred during sign-in',
+      'auth_google_open_failed': 'Could not open the Google sign-in page.',
+      'auth_google_failed': 'Google sign-in failed: {message}',
+      'auth_google_unexpected':
+          'An unexpected error occurred during Google sign-in.',
+      'auth_apple_open_failed': 'Could not open the Apple sign-in page.',
+      'auth_apple_failed': 'Apple sign-in failed: {message}',
+      'auth_apple_unexpected':
+          'An unexpected error occurred during Apple sign-in.',
+      // Profile / account
+      'delete_account': 'Delete account',
+      'delete_account_confirm':
+          'Your account, profile, CV and all data will be permanently deleted. This action cannot be undone.',
+      'delete': 'Delete',
+      'delete_account_failed':
+          'Could not delete the account. Please try again later.',
+      'cv_too_large': 'The CV file size cannot exceed 10 MB.',
+      'cv_sign_in_required': 'Sign in to upload a CV.',
+      'cv_upload_success': 'CV uploaded and updated successfully!',
+      'cv_upload_failed': 'CV upload failed: {message}',
+      'avatar_sign_in_required': 'Sign in to upload a photo.',
+      'avatar_upload_success': 'Profile photo updated successfully!',
+      'avatar_upload_failed': 'Photo upload failed: {message}',
+      'cv_update_title': 'Update Digital CV',
+      'cv_pick_pdf': 'Select a PDF file',
+      'cv_max_size': 'Maximum file size: 10 MB',
+      // Map / jobs
+      'jobs_load_failed': 'Could not load listings: {message}',
+      'job_data_not_found': 'Job details not found',
+      'job_already_applied': 'You have already applied to this job.',
+      'job_apply_failed': 'Application could not be sent: {message}',
+      'job_screen_open_failed': 'Could not open the job screen: {message}',
+      'only_verified_jobs': 'Only verified listings',
+      'my_location': 'My location',
+      'contact_person': 'Contact person: {name}',
     },
   };
 

@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/app_language.dart';
 import '../services/theme_service.dart';
 import '../services/whatsapp_auth_service.dart';
+import '../widgets/language_theme_controls.dart';
 import '../widgets/legal_footer.dart';
 import '../widgets/online_users_badge.dart';
 import 'home_map_screen.dart';
@@ -259,7 +260,8 @@ class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   static const _oauthRedirectUri = 'com.example.workspot://login-callback/';
   static const _webOAuthRedirectUri = 'https://workspot.az';
-  static const _genericAuthErrorMessage = 'Giriş zamanı xəta baş verdi';
+  static String get _genericAuthErrorMessage =>
+      appLang.translate('auth_error_generic');
 
   /// iOS client ID used by the native Google Sign-In SDK on iOS.
   static const _googleIosClientId =
@@ -275,12 +277,6 @@ class _AuthScreenState extends State<AuthScreen>
     'WORKSPOT_ADMIN_BYPASS_PIN',
     defaultValue: '123456',
   );
-
-  static const Map<String, String> _languageLabels = {
-    'az': 'AZ',
-    'en': 'EN',
-    'ru': 'RU',
-  };
 
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
@@ -356,76 +352,7 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Widget _buildCornerControls(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF111827).withValues(alpha: 0.88)
-            : Colors.white.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-            color: isDark ? Colors.white12 : const Color(0x1A0F172A)),
-        boxShadow: const [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 16, offset: Offset(0, 6)),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: isDark
-                ? appLang.translate('auth_light_mode')
-                : appLang.translate('auth_dark_mode'),
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            onPressed: themeService.toggleTheme,
-            icon: Icon(
-              isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-              color: isDark ? Colors.amber.shade200 : const Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            width: 1,
-            height: 22,
-            color: isDark ? Colors.white12 : const Color(0x1A0F172A),
-          ),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: appLang.currentLanguage,
-              isDense: true,
-              icon: Icon(
-                Icons.expand_more_rounded,
-                size: 18,
-                color: isDark ? Colors.white70 : const Color(0xFF0F172A),
-              ),
-              borderRadius: BorderRadius.circular(14),
-              dropdownColor: isDark ? const Color(0xFF111827) : Colors.white,
-              style: TextStyle(
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-              items: _languageLabels.entries
-                  .map(
-                    (entry) => DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                appLang.changeLanguage(value);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+    return const LanguageThemeControls();
   }
 
   Future<void> _openAdminPinDialog() async {
@@ -556,8 +483,8 @@ class _AuthScreenState extends State<AuthScreen>
 
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Google giriş səhifəsi açıla bilmədi.'),
+          SnackBar(
+            content: Text(appLang.translate('auth_google_open_failed')),
           ),
         );
       }
@@ -567,7 +494,8 @@ class _AuthScreenState extends State<AuthScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Google ilə giriş alınmadı: ${error.message}')),
+              content: Text(appLang.translateWithArgs(
+                  'auth_google_failed', {'message': error.message}))),
         );
       }
     } catch (error, stackTrace) {
@@ -575,9 +503,9 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content:
-                Text('Google ilə giriş zamanı gözlənilməz xəta baş verdi.'),
+                Text(appLang.translate('auth_google_unexpected')),
           ),
         );
       }
@@ -607,7 +535,7 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrint('OAuth callback error: $providerError');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(_genericAuthErrorMessage)),
+          SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
       return;
@@ -637,7 +565,7 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(_genericAuthErrorMessage)),
+          SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
     } catch (error, stackTrace) {
@@ -645,7 +573,7 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(_genericAuthErrorMessage)),
+          SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
     } finally {
@@ -675,8 +603,8 @@ class _AuthScreenState extends State<AuthScreen>
 
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Apple giriş səhifəsi açıla bilmədi.'),
+          SnackBar(
+            content: Text(appLang.translate('auth_apple_open_failed')),
           ),
         );
       }
@@ -686,7 +614,8 @@ class _AuthScreenState extends State<AuthScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Apple ilə giriş alınmadı: ${error.message}')),
+              content: Text(appLang.translateWithArgs(
+                  'auth_apple_failed', {'message': error.message}))),
         );
       }
     } catch (error, stackTrace) {
@@ -694,9 +623,9 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content:
-                Text('Apple ilə giriş zamanı gözlənilməz xəta baş verdi.'),
+                Text(appLang.translate('auth_apple_unexpected')),
           ),
         );
       }
@@ -742,7 +671,7 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrint('Apple authorization failed: ${error.code} ${error.message}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(_genericAuthErrorMessage)),
+          SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
     } catch (error, stackTrace) {
@@ -750,7 +679,7 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(_genericAuthErrorMessage)),
+          SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
     }
@@ -791,7 +720,7 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrint('Google sign-in failed: ${error.code} ${error.description}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(_genericAuthErrorMessage)),
+          SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
     } catch (error, stackTrace) {
@@ -799,7 +728,7 @@ class _AuthScreenState extends State<AuthScreen>
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(_genericAuthErrorMessage)),
+          SnackBar(content: Text(_genericAuthErrorMessage)),
         );
       }
     }
