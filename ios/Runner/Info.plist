@@ -14,7 +14,12 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>az</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Workspot</string>
 	<key>CFBundleExecutable</key>
@@ -62,15 +67,15 @@
 		<string>whatsapp</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Vakansiya üçün şəkil seçmək üçün qalereyaya giriş icazəsi tələb olunur.</string>
+	<string>WorkSpot needs access to your photo library so you can choose a photo for a job listing or your profile.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Vakansiya üçün şəkil çəkmək üçün kameraya giriş icazəsi tələb olunur.</string>
+	<string>WorkSpot needs camera access so you can take a photo for a job listing or your profile.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Video və səs əlavə etmək üçün mikrofona giriş icazəsi tələb olunur.</string>
+	<string>WorkSpot needs microphone access so you can add audio or video to a job listing.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Haritada yakınındaki iş ilanlarını göstermek için konum izni gereklidir.</string>
+	<string>WorkSpot uses your location to show job listings near you on the map.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>İş məkanını xəritədə dəqiq təyin etmək üçün məkan icazəsi tələb olunur.</string>
+	<string>WorkSpot uses your location to show job listings near you and to let employers pin a job location precisely on the map.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

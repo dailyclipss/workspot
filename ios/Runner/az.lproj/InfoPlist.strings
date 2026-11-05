@@ -1,0 +1,7 @@
+/* Localized permission usage descriptions (Azerbaijani). */
+
+NSLocationWhenInUseUsageDescription = "WorkSpot xəritədə sizə yaxın iş elanlarını göstərmək üçün məkanınızdan istifadə edir.";
+NSLocationAlwaysAndWhenInUseUsageDescription = "WorkSpot sizə yaxın iş elanlarını göstərmək və işəgötürənlərin iş yerini xəritədə dəqiq qeyd etməsinə imkan vermək üçün məkanınızdan istifadə edir.";
+NSCameraUsageDescription = "WorkSpot vakansiya və ya profil üçün şəkil çəkməyiniz üçün kameraya giriş icazəsi tələb edir.";
+NSPhotoLibraryUsageDescription = "WorkSpot vakansiya və ya profil üçün şəkil seçməyiniz üçün qalereyaya giriş icazəsi tələb edir.";
+NSMicrophoneUsageDescription = "WorkSpot vakansiyaya səs və ya video əlavə etməyiniz üçün mikrofona giriş icazəsi tələb edir.";

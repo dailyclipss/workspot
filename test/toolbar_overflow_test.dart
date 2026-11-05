@@ -94,7 +94,8 @@ Widget _buildToolbar({required bool isDark}) {
 }
 
 void main() {
-  for (final width in [320.0, 360.0, 375.0, 390.0, 430.0]) {
+  // Phone widths + 11-inch iPad Air (portrait 820, landscape 1180).
+  for (final width in [320.0, 360.0, 375.0, 390.0, 430.0, 820.0, 1180.0]) {
     for (final isDark in [false, true]) {
       testWidgets(
           'toolbar fits at ${width.toInt()}px (${isDark ? 'dark' : 'light'})',

@@ -193,7 +193,9 @@ class _AddJobScreenState extends State<AddJobScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Məkan müəyyən edilə bilmədi: $error')),
+        SnackBar(
+            content: Text(appLang
+                .translateWithArgs('location_failed', {'message': '$error'}))),
       );
     } finally {
       if (mounted) setState(() => _isLocating = false);
@@ -742,7 +744,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.my_location_rounded, size: 18),
-                      label: const Text('Mənim Məkanım'),
+                      label: Text(appLang.translate('my_location_btn')),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF2563EB),
                         side: BorderSide(color: const Color(0xFF2563EB).withOpacity(0.4)),

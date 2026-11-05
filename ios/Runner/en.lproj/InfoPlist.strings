@@ -1,0 +1,7 @@
+/* Localized permission usage descriptions (English). */
+
+NSLocationWhenInUseUsageDescription = "WorkSpot uses your location to show job listings near you on the map.";
+NSLocationAlwaysAndWhenInUseUsageDescription = "WorkSpot uses your location to show job listings near you and to let employers pin a job location precisely on the map.";
+NSCameraUsageDescription = "WorkSpot needs camera access so you can take a photo for a job listing or your profile.";
+NSPhotoLibraryUsageDescription = "WorkSpot needs access to your photo library so you can choose a photo for a job listing or your profile.";
+NSMicrophoneUsageDescription = "WorkSpot needs microphone access so you can add audio or video to a job listing.";

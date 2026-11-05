@@ -449,6 +449,8 @@ class AppLanguage extends ChangeNotifier {
       'only_verified_jobs': 'Yalnız təsdiqlənmiş elanlar',
       'my_location': 'Mövqeyim',
       'contact_person': 'Əlaqədar şəxs: {name}',
+      'location_failed': 'Məkan müəyyən edilə bilmədi: {message}',
+      'my_location_btn': 'Mənim Məkanım',
     },
     'ru': {
       'app_title': 'WorkSpot',
@@ -826,6 +828,8 @@ class AppLanguage extends ChangeNotifier {
       'only_verified_jobs': 'Только проверенные объявления',
       'my_location': 'Моё местоположение',
       'contact_person': 'Контактное лицо: {name}',
+      'location_failed': 'Не удалось определить местоположение: {message}',
+      'my_location_btn': 'Моё местоположение',
     },
     'en': {
       'app_title': 'WorkSpot',
@@ -1202,6 +1206,8 @@ class AppLanguage extends ChangeNotifier {
       'only_verified_jobs': 'Only verified listings',
       'my_location': 'My location',
       'contact_person': 'Contact person: {name}',
+      'location_failed': 'Could not determine location: {message}',
+      'my_location_btn': 'My Location',
     },
   };
 
