@@ -61,3 +61,4 @@ _icons/
 *.pem
 AuthKey_*.p8
 supabase/.temp/
+env.json

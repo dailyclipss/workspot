@@ -102,9 +102,13 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
           .from('payment_requests')
           .update({'status': paymentStatus}).eq('id', requestId);
 
-      await Supabase.instance.client.from('jobs').update({
-        'status': paymentStatus == 'approved' ? 'active' : 'rejected'
-      }).eq('id', jobId);
+      if (paymentStatus == 'approved') {
+        await Supabase.instance.client
+            .rpc('activate_job_admin', params: {'p_job_id': jobId});
+      } else {
+        await Supabase.instance.client.rpc('set_job_status_admin',
+            params: {'p_job_id': jobId, 'p_status': 'rejected'});
+      }
 
       final job = _jobsById[jobId];
       final ownerId = _jobOwnerId(job);

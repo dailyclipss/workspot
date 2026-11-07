@@ -6,8 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/theme_service.dart';
 import 'services/app_language.dart';
 import 'services/presence_service.dart';
-import 'screens/admin_dashboard_screen.dart';
-import 'screens/admin_login_screen.dart';
 import 'screens/home_map_screen.dart';
 import 'widgets/legal_footer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -132,21 +130,6 @@ class MyApp extends StatelessWidget {
           home: const HomeMapScreen(),
           onGenerateRoute: (settings) {
             switch (settings.name) {
-              case '/admin':
-                final arguments = settings.arguments;
-                final hasPasscodeOverride =
-                    arguments is Map && arguments['passcodeOverride'] == true;
-                return MaterialPageRoute(
-                  settings: settings,
-                  builder: (_) => hasPasscodeOverride
-                      ? const AdminDashboardScreen(allowPasscodeOverride: true)
-                      : const AdminLoginScreen(),
-                );
-              case '/admin-login':
-                return MaterialPageRoute(
-                  settings: settings,
-                  builder: (_) => const AdminLoginScreen(),
-                );
               case '/about':
                 return _legalRoute(settings, LegalPageType.about);
               case '/contact':

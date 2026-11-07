@@ -6,6 +6,8 @@ workflows:
     environment:
       android_signing:
         - workspot_upload
+      groups:
+        - workspot_admin
       flutter: stable
     scripts:
       - name: Get Flutter packages
@@ -13,7 +15,8 @@ workflows:
       - name: Build AAB
         script: |
           flutter build appbundle --release \
-            --build-number=$BUILD_NUMBER
+            --build-number=$BUILD_NUMBER \
+            --dart-define=WORKSPOT_ADMIN_PIN=$WORKSPOT_ADMIN_PIN
     artifacts:
       - build/app/outputs/bundle/release/*.aab
   ios-release:
@@ -25,6 +28,7 @@ workflows:
     environment:
       groups:
         - signing
+        - workspot_admin
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -55,6 +59,7 @@ workflows:
         script: |
           flutter build ipa --release \
             --build-number=$BUILD_NUMBER \
+            --dart-define=WORKSPOT_ADMIN_PIN=$WORKSPOT_ADMIN_PIN \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa

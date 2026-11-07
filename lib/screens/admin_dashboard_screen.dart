@@ -15,9 +15,7 @@ import 'auth_screen.dart';
 import 'home_map_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
-  final bool allowPasscodeOverride;
-
-  const AdminDashboardScreen({super.key, this.allowPasscodeOverride = false});
+  const AdminDashboardScreen({super.key});
 
   @override
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
@@ -57,18 +55,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final user = _client.auth.currentUser;
     _adminLabel = user?.email ?? user?.id;
 
-    if (widget.allowPasscodeOverride) {
-      if (!mounted) return;
-      setState(() {
-        _isAuthorized = true;
-        _isLoading = true;
-        _errorMessage = null;
-      });
-      await _loadDashboardData();
-      return;
-    }
-
-    final isAdmin = await AdminAuthService.isAdminUser(_client);
+    final isAdmin = await AdminAuthService.isAdminUser(_client, refresh: true);
     if (!isAdmin) {
       if (!mounted) return;
       setState(() {
@@ -338,14 +325,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     });
   }
 
+  Future<void> _patchJobRow(String jobId, Map<String, dynamic> values) async {
+    final rows = await _client.from('jobs').update(values).eq('id', jobId).select('id');
+    if (rows.isEmpty) {
+      throw const _NoRowsUpdatedException();
+    }
+  }
+
   Future<void> _persistJobPatch(
     String jobId,
     Map<String, dynamic> payload, {
     Map<String, dynamic>? fallbackPayload,
   }) async {
     try {
-      await _client.from('jobs').update(payload).eq('id', jobId);
+      await _patchJobRow(jobId, payload);
     } catch (error) {
+      if (error is _NoRowsUpdatedException) rethrow;
       // Retry without columns that don't exist in this schema (PGRST204).
       final working = Map<String, dynamic>.from(payload);
       Object lastError = error;
@@ -357,9 +352,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         working.remove(missing);
         if (working.isEmpty) return;
         try {
-          await _client.from('jobs').update(working).eq('id', jobId);
+          await _patchJobRow(jobId, working);
           return;
         } catch (retryError) {
+          if (retryError is _NoRowsUpdatedException) rethrow;
           lastError = retryError;
         }
       }
@@ -371,7 +367,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           lastError.toString().toLowerCase().contains('is_vacancy');
       if (!needsFallback) throw lastError;
 
-      await _client.from('jobs').update(fallbackPayload).eq('id', jobId);
+      await _patchJobRow(jobId, fallbackPayload);
     }
   }
 
@@ -414,12 +410,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
+  Future<bool> _runJobRpc(
+    String jobId,
+    String function,
+    Map<String, dynamic> params,
+  ) async {
+    if (_busyJobId != null) return false;
+    setState(() => _busyJobId = jobId);
+    try {
+      await _client.rpc(function, params: {'p_job_id': jobId, ...params});
+      await _loadDashboardData();
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      final denied = error is PostgrestException && error.code == '42501';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(denied
+              ? 'İcazə yoxdur: admin hesabı ilə yenidən daxil olun.'
+              : 'Əməliyyat uğursuz oldu: $error'),
+          backgroundColor: _danger,
+        ),
+      );
+      return false;
+    } finally {
+      if (mounted) setState(() => _busyJobId = null);
+    }
+  }
+
   Future<void> _toggleVip(Map<String, dynamic> job, bool value) async {
-    await _updateJob(job['id'].toString(), {
-      'is_vip': value,
-      'ad_status': value ? 'vip' : 'active',
-      'status': value ? 'vip' : 'active',
-    }, baseJob: job);
+    await _runJobRpc(job['id'].toString(), 'set_job_vip_admin', {'p_vip': value});
   }
 
   Future<void> _toggleVacancy(Map<String, dynamic> job, bool value) async {
@@ -454,11 +474,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _setAdStatus(Map<String, dynamic> job, String status) async {
-    await _updateJob(job['id'].toString(), {
-      'ad_status': status,
-      'status': status,
-    }, baseJob: job);
-    await _notifyJobStatusChange(job, status);
+    final ok = await _runJobRpc(job['id'].toString(), 'set_job_status_admin', {'p_status': status});
+    if (ok) await _notifyJobStatusChange(job, status);
   }
 
   Future<void> _deleteJob(Map<String, dynamic> job) async {
@@ -479,11 +496,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ),
     );
     if (confirmed != true) return;
-    await _updateJob(job['id'].toString(), {
-      'ad_status': 'deleted',
-      'status': 'deleted',
-    }, baseJob: job);
-    await _notifyJobStatusChange(job, 'deleted');
+    final ok = await _runJobRpc(job['id'].toString(), 'set_job_status_admin', {'p_status': 'deleted'});
+    if (ok) await _notifyJobStatusChange(job, 'deleted');
   }
 
   Future<void> _openEditJobSheet(Map<String, dynamic> job) async {
@@ -1440,6 +1454,14 @@ class _StatusChip extends StatelessWidget {
       child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
     );
   }
+}
+
+class _NoRowsUpdatedException implements Exception {
+  const _NoRowsUpdatedException();
+
+  @override
+  String toString() =>
+      'Dəyişiklik tətbiq olunmadı: admin icazəsi yoxdur (0 sətir yeniləndi).';
 }
 
 class _ActionPill extends StatelessWidget {

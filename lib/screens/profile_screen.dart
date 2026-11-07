@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
+import '../config/admin_gate.dart';
 import '../services/app_language.dart';
 import '../services/admin_auth_service.dart';
 import '../widgets/language_theme_controls.dart';
@@ -104,6 +105,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await AdminAuthService.isAdminUser(Supabase.instance.client);
     if (!mounted) return;
     setState(() => _isAdminUser = isAdmin);
+  }
+
+  void _openAdmin() {
+    if (!mounted) return;
+    AdminGate.open(context);
   }
 
   // Profile completeness: name, profession, phone and an uploaded CV, 25% each.
@@ -540,7 +546,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.pushNamed(context, '/admin');
+                        _openAdmin();
                       },
                     ),
                     Divider(color: _line),

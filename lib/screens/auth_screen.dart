@@ -10,6 +10,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/admin_gate.dart';
 import '../services/app_language.dart';
 import '../services/theme_service.dart';
 import '../services/whatsapp_auth_service.dart';
@@ -273,10 +274,6 @@ class _AuthScreenState extends State<AuthScreen>
 
   /// True only on iOS devices (never on web, Android, or desktop).
   static bool get _isNativeIos => !kIsWeb && Platform.isIOS;
-  static const String _adminBypassPin = String.fromEnvironment(
-    'WORKSPOT_ADMIN_BYPASS_PIN',
-    defaultValue: '123456',
-  );
 
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
@@ -353,105 +350,6 @@ class _AuthScreenState extends State<AuthScreen>
 
   Widget _buildCornerControls(bool isDark) {
     return const LanguageThemeControls();
-  }
-
-  Future<void> _openAdminPinDialog() async {
-    final pinController = TextEditingController();
-
-    final accepted = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        bool obscurePin = true;
-
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF111827),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: Text(
-                appLang.translate('auth_admin_title'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    appLang.translate('auth_pin_prompt'),
-                    style: const TextStyle(color: Color(0xFF9CA3AF)),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: pinController,
-                    keyboardType: TextInputType.number,
-                    obscureText: obscurePin,
-                    maxLength: 6,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: appLang.translate('auth_pin_label'),
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      counterText: '',
-                      filled: true,
-                      fillColor: const Color(0xFF0F172A),
-                      suffixIcon: IconButton(
-                        onPressed: () =>
-                            setState(() => obscurePin = !obscurePin),
-                        icon: Icon(
-                          obscurePin
-                              ? Icons.visibility_off_rounded
-                              : Icons.visibility_rounded,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: Text(appLang.translate('auth_cancel')),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final pin = pinController.text.trim();
-                    if (!RegExp(r'^\d{6}$').hasMatch(pin)) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                appLang.translate('auth_pin_length_error'))),
-                      );
-                      return;
-                    }
-                    Navigator.of(dialogContext).pop(pin == _adminBypassPin);
-                  },
-                  child: Text(appLang.translate('auth_login')),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    pinController.dispose();
-
-    if (accepted == true && mounted) {
-      Navigator.pushReplacementNamed(
-        context,
-        '/admin',
-        arguments: const {'passcodeOverride': true},
-      );
-    } else if (accepted == false && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(appLang.translate('auth_pin_invalid'))),
-      );
-    }
   }
 
   Future<void> _handleGoogleAuth() async {
@@ -842,7 +740,7 @@ class _AuthScreenState extends State<AuthScreen>
                               children: [
                                 const SizedBox(height: 8),
                                 GestureDetector(
-                                  onLongPress: _openAdminPinDialog,
+                                  onLongPress: () => AdminGate.open(context),
                                   child: ScaleTransition(
                                     scale: _scaleAnimation,
                                     child: Container(
