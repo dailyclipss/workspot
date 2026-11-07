@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,18 +5,11 @@ class WhatsAppAuthService {
   WhatsAppAuthService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
-  static const _otpLifetime = Duration(minutes: 2);
-  // App Store review demo account: no WhatsApp message is sent for this number.
-  static const _reviewPhoneNumber = '+994501234567';
-  static const _reviewOtpCode = '123456';
   static final RegExp _azerbaijanPhonePattern = RegExp(
     r'^\+994(?:10|50|51|55|60|70|77|99)\d{7}$',
   );
 
   final SupabaseClient _client;
-  String? _phoneNumber;
-  String? _otpCode;
-  DateTime? _expiresAt;
 
   static String normalizePhoneNumber(String phoneNumber) {
     final digits = phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
@@ -35,22 +26,17 @@ class WhatsAppAuthService {
       throw const FormatException('A valid +994 phone number is required.');
     }
 
-    final otpCode = normalizedPhoneNumber == _reviewPhoneNumber
-        ? _reviewOtpCode
-        : _generateOtpCode();
-    if (normalizedPhoneNumber != _reviewPhoneNumber) {
-      await _client.functions.invoke(
-        'send-whatsapp-otp',
-        body: {
-          'phone': normalizedPhoneNumber.substring(1),
-          'otpCode': otpCode,
-        },
-      );
+    // The server generates, stores (hashed) and sends the code.
+    final response = await _client.functions.invoke(
+      'send-whatsapp-otp',
+      body: {
+        'v': 2,
+        'phone': normalizedPhoneNumber.substring(1),
+      },
+    );
+    if (response.status >= 300) {
+      throw StateError('OTP could not be sent (${response.status}).');
     }
-
-    _phoneNumber = normalizedPhoneNumber;
-    _otpCode = otpCode;
-    _expiresAt = DateTime.now().add(_otpLifetime);
   }
 
   Future<WhatsAppAuthSession> verifyOTP(
@@ -58,36 +44,33 @@ class WhatsAppAuthService {
     String code,
   ) async {
     final normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
-    final expiresAt = _expiresAt;
-    if (_phoneNumber != normalizedPhoneNumber ||
-        _otpCode == null ||
-        expiresAt == null ||
-        DateTime.now().isAfter(expiresAt) ||
-        code.trim() != _otpCode) {
+
+    // The server checks the code and returns a one-time token for a real
+    // session bound to this phone number.
+    final response = await _client.functions.invoke(
+      'verify-whatsapp-otp',
+      body: {
+        'phone': normalizedPhoneNumber.substring(1),
+        'code': code.trim(),
+      },
+    );
+    final data = response.data;
+    final tokenHash = data is Map ? data['token_hash'] : null;
+    if (response.status >= 300 || tokenHash is! String || tokenHash.isEmpty) {
       throw StateError('Invalid or expired OTP code.');
     }
 
-    await _ensureSupabaseSession();
+    await _client.auth.verifyOTP(
+      tokenHash: tokenHash,
+      type: OtpType.magiclink,
+    );
 
     final session = WhatsAppAuthSession(
       phoneNumber: normalizedPhoneNumber,
       signedInAt: DateTime.now(),
     );
     WhatsAppAuthState.instance.signIn(session);
-    _otpCode = null;
-    _expiresAt = null;
     return session;
-  }
-
-  // The WhatsApp OTP is verified by the app, while Supabase supplies the
-  // authenticated identity required by backend policies.
-  Future<void> _ensureSupabaseSession() async {
-    if (_client.auth.currentSession != null) return;
-    await _client.auth.signInAnonymously();
-  }
-
-  String _generateOtpCode() {
-    return (Random.secure().nextInt(1000000)).toString().padLeft(6, '0');
   }
 }
 
