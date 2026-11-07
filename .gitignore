@@ -60,3 +60,4 @@ _icons/
 *.p8
 *.pem
 AuthKey_*.p8
+supabase/.temp/
