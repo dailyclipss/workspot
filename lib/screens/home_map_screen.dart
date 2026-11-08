@@ -14,7 +14,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart'
     hide Cluster, ClusterManager;
 import 'package:url_launcher/url_launcher.dart';
 import '../core/services/application_service.dart';
-import '../models/job_model.dart';
 import '../services/app_language.dart';
 import '../services/location_service.dart';
 import '../services/job_location_resolver.dart';
@@ -22,7 +21,6 @@ import '../services/job_moderation_service.dart';
 import '../services/theme_service.dart';
 import 'add_job_screen.dart' hide LatLng;
 import 'auth_screen.dart';
-import 'company_details_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import '../utils/contact_utils.dart';
@@ -2561,20 +2559,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
-      ),
-    );
-  }
-
-  void _openFullJobDetails(Map<String, dynamic> job) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CompanyDetailsScreen(
-          companyName: _jobBusinessName(job),
-          companyJobs: [
-            JobModel.fromJson(job),
-          ],
-        ),
       ),
     );
   }
