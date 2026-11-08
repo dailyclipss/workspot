@@ -26,6 +26,7 @@ import 'company_details_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import '../utils/contact_utils.dart';
+import '../utils/vip_utils.dart';
 import '../widgets/language_theme_controls.dart';
 
 class _CategoryMeta {
@@ -71,10 +72,7 @@ IconData _getCategoryIcon(String? category) {
 
 Widget _buildMarkerWidget(Map<String, dynamic> job) {
   // Safe bool parse for VIP/Verified status
-  final isVip = job['is_vip'] == true ||
-      job['is_vip'] == 1 ||
-      job['is_vip'].toString().toLowerCase() == 'true' ||
-      job['is_verified'] == true;
+  final isVip = isJobVipActive(job) || job['is_verified'] == true;
 
   final salary = job['salary'] ?? '0';
 
@@ -478,7 +476,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           normalizedJob['ad_status']?.toString().toLowerCase().trim() ?? '';
       final hasVacancy = _jobHasVacancy(normalizedJob);
       normalizedJob['is_verified'] ??=
-          (adStatus == 'active' || _jobBool(normalizedJob['is_vip'])) &&
+          (adStatus == 'active' || isJobVipActive(normalizedJob)) &&
               hasVacancy;
 
       final resolved = JobLocationResolver.resolve(
@@ -519,7 +517,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return adStatus == 'active' ||
         adStatus == 'approved' ||
         isActiveFlag ||
-        _jobBool(job['is_vip']);
+        isJobVipActive(job);
   }
 
   String? _jobEmployerId(Map<String, dynamic> job) {
@@ -676,19 +674,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return adStatus == 'active' && _jobHasVacancy(job);
   }
 
-  bool _jobIsVipActive(Map<String, dynamic> job) {
-    final bool isVip = job['is_vip'] == true ||
-        job['is_vip'] == 1 ||
-        job['is_vip'].toString() == 'true';
-    if (!isVip) return false;
-
-    final rawExpiry = job['vip_until'] ?? job['vip_expires_at'];
-    if (rawExpiry == null || rawExpiry.toString().trim().isEmpty) {
-      return true;
-    }
-    final expiry = DateTime.tryParse(rawExpiry.toString());
-    return expiry == null || expiry.isAfter(DateTime.now());
-  }
+  bool _jobIsVipActive(Map<String, dynamic> job) => isJobVipActive(job);
 
   String _jobResponseStatus(Map<String, dynamic> job) {
     return _jobText(job, 'response_status', '');

@@ -11,6 +11,7 @@ import '../services/notification_service.dart';
 import '../services/presence_service.dart';
 import '../widgets/online_users_badge.dart';
 import '../services/job_location_resolver.dart';
+import '../utils/vip_utils.dart';
 import 'auth_screen.dart';
 import 'home_map_screen.dart';
 
@@ -141,9 +142,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         return inMonth && isCompleted && isB2B;
       }).toList();
 
-      final activeJobs = jobs.where((job) => _jobAdStatus(job) == 'active' || _jobBool(job['is_vip'])).length;
+      final activeJobs = jobs.where((job) => _jobAdStatus(job) == 'active' || isJobVipActive(job)).length;
       final pendingApprovals = jobs.where((job) => _isPendingJob(job)).length;
-      final vipJobs = jobs.where((job) => _jobBool(job['is_vip'])).length;
+      final vipJobs = jobs.where(isJobVipActive).length;
       final monthlyRevenue = monthlyPayments.fold<double>(0, (sum, payment) {
         final amount = _parseAmount(payment['amount']);
         return sum + amount;
@@ -308,9 +309,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   void _recalculateJobMetrics(List<Map<String, dynamic>> jobs) {
-    _activeJobs = jobs.where((job) => _jobAdStatus(job) == 'active' || _jobBool(job['is_vip'])).length;
+    _activeJobs = jobs.where((job) => _jobAdStatus(job) == 'active' || isJobVipActive(job)).length;
     _pendingApprovals = jobs.where((job) => _isPendingJob(job)).length;
-    _vipJobs = jobs.where((job) => _jobBool(job['is_vip'])).length;
+    _vipJobs = jobs.where(isJobVipActive).length;
   }
 
   void _replaceJobLocally(String jobId, Map<String, dynamic> patch) {
