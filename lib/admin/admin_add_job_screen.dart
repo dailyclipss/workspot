@@ -42,6 +42,7 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
         'salary_type': _salaryType,
         'location': 'POINT($lng $lat)',
         'is_active': true,
+        'user_id': Supabase.instance.client.auth.currentUser?.id,
       });
 
       if (!mounted) return;
