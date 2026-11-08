@@ -7,9 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_language.dart';
 
-/// How the payment was collected.
-enum PaymentMethod { localPos, appleIap, googleIap }
-
 /// Which record in Supabase should be marked VIP after a successful payment.
 enum PaymentTargetType { job, company, proSubscription }
 
@@ -63,30 +60,10 @@ class PaymentCatalog {
   );
 }
 
-class PaymentResult {
-  final bool success;
-  final String? transactionId;
-  final String message;
-  final PaymentPackage package;
-  final PaymentMethod method;
-  final DateTime? vipExpiresAt;
+/// Server-side result of an order, as written by the Epoint callback.
+enum OrderOutcome { paid, failed, pending }
 
-  const PaymentResult({
-    required this.success,
-    required this.message,
-    required this.package,
-    required this.method,
-    this.transactionId,
-    this.vipExpiresAt,
-  });
-}
-
-/// Unified payment handler for local merchant POS (B2B, AZN) and
-/// Apple/Google in-app purchases (B2C Pro subscription, USD).
-///
-/// The actual POS SDK / `in_app_purchase` package integration is not wired up
-/// yet; the `_charge*` methods are the single place to plug in the real
-/// payment gateway calls once credentials/SDKs are available.
+/// Starts Epoint checkouts and reads their server-side results.
 class PaymentService {
   PaymentService._();
   static final PaymentService instance = PaymentService._();
@@ -173,143 +150,37 @@ class PaymentService {
     }
   }
 
-  Future<PaymentResult> payWithLocalPos({
-    required PaymentPackage package,
-    required String targetId,
-    required PaymentTargetType targetType,
-  }) async {
-    return _processPayment(
-      package: package,
-      method: PaymentMethod.localPos,
-      targetId: targetId,
-      targetType: targetType,
-      charge: () => _chargeLocalPos(package),
-    );
-  }
-
-  Future<PaymentResult> payWithInAppPurchase({
-    required PaymentPackage package,
-    required String targetId,
-    required PaymentTargetType targetType,
-    required bool isIOS,
-  }) async {
-    return _processPayment(
-      package: package,
-      method: isIOS ? PaymentMethod.appleIap : PaymentMethod.googleIap,
-      targetId: targetId,
-      targetType: targetType,
-      charge: () =>
-          isIOS ? _chargeAppleIap(package) : _chargeGoogleIap(package),
-    );
-  }
-
-  Future<PaymentResult> _processPayment({
-    required PaymentPackage package,
-    required PaymentMethod method,
-    required String targetId,
-    required PaymentTargetType targetType,
-    required Future<String> Function() charge,
-  }) async {
-    try {
-      final userId = _client.auth.currentUser?.id;
-      if (!isValidUuid(userId)) {
-        throw StateError(
-            'An authenticated user is required to make a payment.');
-      }
-      if (!isValidUuid(targetId)) {
-        throw ArgumentError.value(
-          targetId,
-          'targetId',
-          'A valid job, company, or subscription UUID is required.',
-        );
-      }
-
-      final transactionId = await charge();
-      final vipExpiresAt =
-          DateTime.now().add(Duration(days: package.vipDurationDays));
-
-      await _recordSuccessfulPayment(
-        transactionId: transactionId,
-        userId: userId!,
-        package: package,
-        method: method,
-        targetId: targetId,
-        targetType: targetType,
-        vipExpiresAt: vipExpiresAt,
-      );
-
-      return PaymentResult(
-        success: true,
-        transactionId: transactionId,
-        message: appLang.translate('payment_success_message'),
-        package: package,
-        method: method,
-        vipExpiresAt: vipExpiresAt,
-      );
-    } catch (error) {
-      return PaymentResult(
-        success: false,
-        message: '${appLang.translate('payment_failed_prefix')} $error',
-        package: package,
-        method: method,
-      );
+  /// Reads the order's server-side status (RLS limits this to the caller's
+  /// own orders). The client never marks an order paid; only the Epoint
+  /// callback does.
+  Future<OrderOutcome> fetchOrderOutcome(String orderId) async {
+    final row = await _client
+        .from('orders')
+        .select('status')
+        .eq('order_id', orderId)
+        .maybeSingle();
+    switch (row?['status']?.toString().toLowerCase().trim()) {
+      case 'paid':
+        return OrderOutcome.paid;
+      case 'failed':
+        return OrderOutcome.failed;
+      default:
+        return OrderOutcome.pending;
     }
   }
 
-  Future<String> _chargeLocalPos(PaymentPackage package) async {
-    throw UnsupportedError(
-      'Local POS payments are unavailable. Use the configured payment gateway.',
-    );
-  }
-
-  Future<String> _chargeAppleIap(PaymentPackage package) async {
-    throw UnsupportedError('Apple in-app purchases are not configured.');
-  }
-
-  Future<String> _chargeGoogleIap(PaymentPackage package) async {
-    throw UnsupportedError('Google Play purchases are not configured.');
-  }
-
-  Future<void> _recordSuccessfulPayment({
-    required String transactionId,
-    required String userId,
-    required PaymentPackage package,
-    required PaymentMethod method,
-    required String targetId,
-    required PaymentTargetType targetType,
-    required DateTime vipExpiresAt,
+  /// Polls the order until it leaves `pending` or [timeout] elapses.
+  Future<OrderOutcome> waitForOrderOutcome(
+    String orderId, {
+    Duration interval = const Duration(seconds: 4),
+    Duration timeout = const Duration(seconds: 30),
   }) async {
-    await _client.from('transactions').insert({
-      'reference': transactionId,
-      'user_id': userId,
-      'job_id': targetType == PaymentTargetType.job ? targetId : null,
-      'target_id': targetId,
-      'target_type': targetType.name,
-      'package_type': targetType == PaymentTargetType.job
-          ? 'vip_${package.vipDurationDays}_days'
-          : package.id,
-      'package_id': package.id,
-      'package_name': appLang.translate(package.nameKey),
-      'amount': package.amount,
-      'currency': package.currency,
-      'payment_method': method.name,
-      'status': 'completed',
-      'created_at': DateTime.now().toIso8601String(),
-    });
-
-    if (targetType == PaymentTargetType.job) {
-      await _client.from('jobs').update({
-        'is_vip': true,
-        'vip_until': vipExpiresAt.toIso8601String(),
-      }).eq('id', targetId);
-      return;
-    }
-
-    if (targetType == PaymentTargetType.company) {
-      await _client.from('companies').update({
-        'is_vip': true,
-        'vip_expires_at': vipExpiresAt.toIso8601String(),
-      }).eq('id', targetId);
+    final deadline = DateTime.now().add(timeout);
+    while (true) {
+      final outcome = await fetchOrderOutcome(orderId);
+      if (outcome != OrderOutcome.pending) return outcome;
+      if (DateTime.now().add(interval).isAfter(deadline)) return outcome;
+      await Future<void>.delayed(interval);
     }
   }
 }

@@ -43,7 +43,8 @@ class _ListingPackage {
   double get amount => package.amount;
 }
 
-class _JobPaymentScreenState extends State<JobPaymentScreen> {
+class _JobPaymentScreenState extends State<JobPaymentScreen>
+    with WidgetsBindingObserver {
   static const Color _background = Color(0xFF081120);
   static const Color _surface = Color(0xFF111A2D);
   static const Color _surfaceAlt = Color(0xFF162238);
@@ -82,22 +83,40 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
 
   // The job is inserted once (unpaid); retries and package changes reuse it.
   String? _jobId;
-  Timer? _statusPoll;
   bool _isProcessing = false;
   bool _awaitingPayment = false;
+  bool _checking = false;
   bool _hasFinished = false;
+  // Set when the app went to the background after launching the payment page.
+  bool _leftForPayment = false;
+  // The automatic resume check already told the user the outcome.
+  bool _resultShown = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedPackage = widget.preferPremium ? _packages.last : _packages.first;
     _orderId = _newOrderId();
   }
 
   @override
   void dispose() {
-    _statusPoll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // Only a real trip to the payment page counts as leaving the app.
+      if (_isProcessing || _awaitingPayment) _leftForPayment = true;
+    } else if (state == AppLifecycleState.resumed) {
+      if (_awaitingPayment && _leftForPayment && !_resultShown) {
+        _leftForPayment = false;
+        unawaited(_checkOrder());
+      }
+    }
   }
 
   String _newOrderId() => 'job_${DateTime.now().millisecondsSinceEpoch}';
@@ -118,15 +137,13 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
     );
   }
 
-  Future<String?> _ensureJobCreated(String userId) async {
+  Future<String?> _ensureJobCreated() async {
     if (_jobId != null) return _jobId;
 
     // Stays hidden from the map until the Epoint callback activates it.
     final jobData = Map<String, dynamic>.from(widget.jobDraft)
       ..['ad_status'] = 'pending_payment'
-      ..['is_vip'] = false
-      ..['owner_id'] = userId
-      ..['created_by'] = userId;
+      ..['is_vip'] = false;
     _jobId = await widget.publishJob(jobData);
     return _jobId;
   }
@@ -142,11 +159,13 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
 
     setState(() {
       _isProcessing = true;
+      _leftForPayment = false;
+      _resultShown = false;
       _orderId = _newOrderId();
     });
 
     try {
-      final jobId = await _ensureJobCreated(userId);
+      final jobId = await _ensureJobCreated();
       if (jobId == null || !PaymentService.isValidUuid(jobId)) {
         _showError(appLang.translate('pj_create_failed'));
         return;
@@ -165,7 +184,6 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
       }
 
       if (mounted) setState(() => _awaitingPayment = true);
-      _startStatusPolling(jobId);
     } catch (error) {
       _showError('${appLang.translate('pj_start_failed')}: $error');
     } finally {
@@ -173,36 +191,46 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
     }
   }
 
-  void _startStatusPolling(String jobId) {
-    _statusPoll?.cancel();
-    _statusPoll = Timer.periodic(const Duration(seconds: 4), (_) {
-      unawaited(_checkPaymentStatus(jobId));
-    });
-  }
-
-  Future<void> _checkPaymentStatus(String jobId, {bool manual = false}) async {
-    if (_hasFinished) return;
+  /// Reads the order written by the Epoint callback; the client never
+  /// decides that a payment succeeded. [manual] checks once, otherwise it
+  /// retries every 4 s for up to ~30 s while the order is still pending.
+  Future<void> _checkOrder({bool manual = false}) async {
+    if (_hasFinished || _checking) return;
+    _checking = true;
     try {
-      final row = await Supabase.instance.client
-          .from('jobs')
-          .select('ad_status')
-          .eq('id', jobId)
-          .maybeSingle();
-      final status = row?['ad_status']?.toString().toLowerCase().trim();
-      if (status == 'active' || status == 'approved' || status == 'vip') {
-        await _onPaymentConfirmed();
-      } else if (manual) {
-        _showError(appLang.translate('pj_not_confirmed'));
+      final outcome = await PaymentService.instance.waitForOrderOutcome(
+        _orderId,
+        timeout: manual ? Duration.zero : const Duration(seconds: 30),
+      );
+      if (!mounted) return;
+      if (!manual) _resultShown = true;
+      switch (outcome) {
+        case OrderOutcome.paid:
+          await _onPaymentConfirmed();
+        case OrderOutcome.failed:
+          setState(() => _awaitingPayment = false);
+          _showError(appLang.translate('pj_payment_failed'));
+        case OrderOutcome.pending:
+          _showInfo(appLang.translate(
+              manual ? 'pj_not_confirmed' : 'pj_processing'));
       }
     } catch (_) {
       if (manual) _showError(appLang.translate('pj_status_failed'));
+    } finally {
+      _checking = false;
     }
+  }
+
+  void _showInfo(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 6)),
+    );
   }
 
   Future<void> _onPaymentConfirmed() async {
     if (_hasFinished) return;
     _hasFinished = true;
-    _statusPoll?.cancel();
     if (!mounted) return;
 
     await showDialog<void>(
@@ -322,9 +350,7 @@ class _JobPaymentScreenState extends State<JobPaymentScreen> {
           ),
           const SizedBox(height: 10),
           TextButton(
-            onPressed: _jobId == null
-                ? null
-                : () => _checkPaymentStatus(_jobId!, manual: true),
+            onPressed: () => _checkOrder(manual: true),
             child: Text(appLang.translate('pj_check')),
           ),
         ],
