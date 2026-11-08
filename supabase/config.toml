@@ -1,0 +1,5 @@
+project_id = "workspot"
+
+# Epoint cannot send a Supabase JWT; the callback is protected by its signature check.
+[functions.epoint-callback]
+verify_jwt = false
