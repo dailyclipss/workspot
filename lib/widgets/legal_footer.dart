@@ -5,8 +5,8 @@ import '../services/app_language.dart';
 
 class LegalInfo {
   static const String voen = '1103325022';
-  static const String phone = '+994 50 470 36 66';
-  static const String phoneUri = 'tel:+994504703666';
+  static const String phone = '+994 10 238 23 44';
+  static const String phoneUri = 'tel:+994102382344';
   static const String email = 'support@workspot.az';
 }
 
