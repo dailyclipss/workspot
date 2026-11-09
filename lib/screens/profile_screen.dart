@@ -1329,7 +1329,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     subtitle: Padding(
                                       padding: const EdgeInsets.only(top: 4.0),
                                       child: Text(
-                                        '${jobData?['company_name'] ?? 'Şirkət'} • ${formatSalaryDisplay(parseSalary(Map<String, dynamic>.from(jobData ?? const {})))}',
+                                        '${jobData?['company_name'] ?? 'Şirkət'} • ${formatSalaryDisplay(parseSalary(Map<String, dynamic>.from(jobData ?? const {})), empty: appLang.translate('salary_negotiable'))}',
                                         style: TextStyle(
                                             color: _muted, fontSize: 13),
                                       ),

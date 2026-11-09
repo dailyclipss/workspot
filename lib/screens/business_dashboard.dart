@@ -199,7 +199,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               ],
             ),
           ),
-          Text(formatSalaryDisplay(parseSalary(job)),
+          Text(formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable')),
               style: const TextStyle(
                   color: Color(0xFF60A5FA), fontWeight: FontWeight.bold)),
         ],

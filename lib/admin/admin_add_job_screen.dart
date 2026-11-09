@@ -58,7 +58,7 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
         'category': _category,
         'employment_type': _employmentType,
         ...salaryPayload(salary),
-        'salary_type': _salaryType,
+        'salary_type': salary.isEmpty ? negotiableSalaryType : _salaryType,
         'location': 'POINT($lng $lat)',
         'is_active': true,
         'user_id': Supabase.instance.client.auth.currentUser?.id,

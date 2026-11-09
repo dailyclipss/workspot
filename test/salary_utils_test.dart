@@ -59,6 +59,29 @@ void main() {
     });
   });
 
+  group('negotiable', () {
+    const label = 'Razılaşma ilə';
+    test('null, 0 and negotiable type show negotiable, never 0', () {
+      for (final job in <Map<String, dynamic>>[
+        {'salary_amount': null},
+        {'salary_amount': 0, 'salary': '0'},
+        {'salary': 'Razılaşma ilə'},
+        {'salary_type': 'negotiable', 'salary': '600 AZN', 'salary_min': 600},
+      ]) {
+        final r = parseSalary(job);
+        expect(r.isEmpty, isTrue, reason: '$job');
+        expect(formatSalaryDisplay(r), label);
+        expect(formatSalaryCompact(r), label);
+        expect(formatSalaryDisplay(r), isNot(contains('0 ')));
+      }
+    });
+
+    test('custom empty label', () {
+      expect(formatSalaryDisplay(SalaryRange.empty, empty: 'Negotiable'), 'Negotiable');
+      expect(formatSalaryCompact(SalaryRange.empty, empty: 'Negotiable'), 'Negotiable');
+    });
+  });
+
   group('format and payload', () {
     test('range payload', () {
       final payload = salaryPayload(const SalaryRange(min: 600, max: 2000));
@@ -76,9 +99,18 @@ void main() {
 
     test('empty payload', () {
       final payload = salaryPayload(SalaryRange.empty);
-      expect(payload['salary'], isNull);
+      expect(payload['salary'], 'Razılaşma ilə');
       expect(payload['salary_min'], isNull);
       expect(payload['salary_max'], isNull);
+      expect(payload['salary_amount'], isNull);
+      expect(payload['salary_type'], 'negotiable');
+    });
+
+    test('real salary can reset negotiable type', () {
+      final p = salaryPayload(const SalaryRange(min: 500), clearNegotiable: true);
+      expect(p.containsKey('salary_type'), isTrue);
+      expect(p['salary_type'], isNull);
+      expect(salaryPayload(const SalaryRange(min: 500)).containsKey('salary_type'), isFalse);
     });
 
     test('display and compact', () {

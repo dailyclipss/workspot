@@ -198,7 +198,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String _jobDistrict(Map<String, dynamic> job) => _jobText(job, 'district', '—');
 
   String _jobSalaryLabel(Map<String, dynamic> job) {
-    return formatSalaryDisplay(parseSalary(job));
+    return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
   }
 
   String _jobAdStatus(Map<String, dynamic> job) {
@@ -776,7 +776,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       final navigator = Navigator.of(sheetContext);
                                       if (!formKey.currentState!.validate()) return;
                                       final salaryValues = salaryPayload(salaryFromInputs(
-                                          salaryMinController.text, salaryMaxController.text));
+                                          salaryMinController.text, salaryMaxController.text),
+                                          clearNegotiable: job['salary_type'] == negotiableSalaryType);
                                       await _updateJob(jobId, {
                                         ...salaryValues,
                                         'business_name': businessController.text.trim(),

@@ -34,6 +34,9 @@ class SalaryRange {
   String toString() => 'SalaryRange($min, $max)';
 }
 
+const String negotiableSalaryType = 'negotiable';
+const String negotiableSalaryText = 'Razılaşma ilə';
+
 int? _positiveInt(dynamic value) {
   if (value == null) return null;
   final number = value is num
@@ -69,6 +72,9 @@ SalaryRange parseSalaryText(String? text) {
 /// Reads the range from a job row: `salary_min`/`salary_max` first, then the
 /// `salary` text, then the legacy `salary_amount`.
 SalaryRange parseSalary(Map<String, dynamic> job) {
+  if (job['salary_type']?.toString().toLowerCase() == negotiableSalaryType) {
+    return SalaryRange.empty;
+  }
   final min = _positiveInt(job['salary_min']);
   final max = _positiveInt(job['salary_max']);
   if (min != null || max != null) return _ordered(min, max);
@@ -88,15 +94,15 @@ String? formatSalaryText(SalaryRange range) {
 }
 
 /// Text shown to users: "600 - 2000 ₼", "600 ₼" or [empty].
-String formatSalaryDisplay(SalaryRange range, {String empty = 'Razılaşma ilə'}) {
+String formatSalaryDisplay(SalaryRange range, {String empty = negotiableSalaryText}) {
   if (range.isEmpty) return empty;
   if (range.isRange) return '${range.min} - ${range.max} ₼';
   return '${range.lower} ₼';
 }
 
-/// Short text for map markers: "600-2000 ₼", "600 ₼" or "0 ₼".
-String formatSalaryCompact(SalaryRange range) {
-  if (range.isEmpty) return '0 ₼';
+/// Short text for map markers: "600-2000 ₼", "600 ₼" or [empty].
+String formatSalaryCompact(SalaryRange range, {String empty = negotiableSalaryText}) {
+  if (range.isEmpty) return empty;
   if (range.isRange) return '${range.min}-${range.max} ₼';
   return '${range.lower} ₼';
 }
@@ -111,13 +117,18 @@ bool salaryOverlaps(SalaryRange range, {required num filterMin, num? filterMax})
   return true;
 }
 
-/// Values for the database write. Empty salary writes nulls (by agreement).
-Map<String, dynamic> salaryPayload(SalaryRange range) {
+/// Values for the database write. An empty salary is stored as negotiable:
+/// numeric columns NULL (never 0), salary_type 'negotiable'. [clearNegotiable]
+/// resets a previous 'negotiable' type when a real salary is saved.
+Map<String, dynamic> salaryPayload(SalaryRange range,
+    {bool clearNegotiable = false}) {
   return <String, dynamic>{
     'salary_min': range.min,
     'salary_max': range.max,
-    'salary_amount': range.isEmpty ? 0 : range.amount,
-    'salary': formatSalaryText(range),
+    'salary_amount': range.isEmpty ? null : range.amount,
+    'salary': formatSalaryText(range) ?? negotiableSalaryText,
+    if (range.isEmpty) 'salary_type': negotiableSalaryType,
+    if (!range.isEmpty && clearNegotiable) 'salary_type': null,
   };
 }
 

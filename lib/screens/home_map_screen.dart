@@ -73,7 +73,7 @@ Widget _buildMarkerWidget(Map<String, dynamic> job) {
   // Safe bool parse for VIP/Verified status
   final isVip = isJobVipActive(job) || job['is_verified'] == true;
 
-  final salary = formatSalaryCompact(parseSalary(job));
+  final salary = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
 
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -410,7 +410,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       if (point != null) {
         final isVip = _jobIsVipActive(job);
         final jobId = job['id']?.toString() ?? UniqueKey().toString();
-        final salaryLabel = formatSalaryCompact(parseSalary(job));
+        final salaryLabel = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
         final categoryIcon = _markerCategoryIcon(job);
         final markerKey =
             '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}';
@@ -604,7 +604,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   String _jobSalaryString(Map<String, dynamic> job) {
-    return formatSalaryDisplay(parseSalary(job));
+    return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
   }
 
   String _jobBusinessName(Map<String, dynamic> job) {
@@ -687,7 +687,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   String _jobSalaryLabel(Map<String, dynamic> job) {
-    return formatSalaryDisplay(parseSalary(job));
+    return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
   }
 
   List<Map<String, dynamic>> get _jobs => _filteredJobs;
@@ -907,7 +907,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final job = item.job;
     final jobId = job['id']?.toString() ?? cluster.getId();
     final isVip = _jobIsVipActive(job);
-    final salaryLabel = formatSalaryCompact(parseSalary(job));
+    final salaryLabel = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
     final categoryIcon = _markerCategoryIcon(job);
     final icon = _singleMarkerIcons[
             '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}'] ??=

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/job_model.dart';
+import '../services/app_language.dart';
 import '../utils/salary_utils.dart';
 
 class SavedJobsScreen extends StatefulWidget {
@@ -68,7 +69,7 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
                       ),
                     ),
                     title: Text(job.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('${job.companyName} • ${formatSalaryDisplay(job.salaryRange)}'),
+                    subtitle: Text('${job.companyName} • ${formatSalaryDisplay(job.salaryRange, empty: appLang.translate('salary_negotiable'))}'),
                     trailing: IconButton(
                       icon: const Icon(Icons.star, color: Colors.amber),
                       onPressed: () => _removeSavedJob(job.id),
