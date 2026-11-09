@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import '../config/admin_gate.dart';
 import '../services/app_language.dart';
 import '../services/admin_auth_service.dart';
+import '../utils/salary_utils.dart';
 import '../widgets/language_theme_controls.dart';
 import 'home_map_screen.dart';
 
@@ -273,7 +274,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final response = await client
           .from('applications')
-          .select('*, jobs(title, company_name, salary_amount, category)')
+          .select('*, jobs(title, company_name, salary_amount, salary, salary_min, salary_max, category)')
           .eq('applicant_id', applicant['id'])
           .order('created_at', ascending: false);
 
@@ -1328,7 +1329,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     subtitle: Padding(
                                       padding: const EdgeInsets.only(top: 4.0),
                                       child: Text(
-                                        '${jobData?['company_name'] ?? 'Şirkət'} • ${jobData?['salary_amount'] ?? 0} AZN',
+                                        '${jobData?['company_name'] ?? 'Şirkət'} • ${formatSalaryDisplay(parseSalary(Map<String, dynamic>.from(jobData ?? const {})), empty: appLang.translate('salary_negotiable'))}',
                                         style: TextStyle(
                                             color: _muted, fontSize: 13),
                                       ),

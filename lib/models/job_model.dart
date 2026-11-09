@@ -1,3 +1,5 @@
+import '../utils/salary_utils.dart';
+
 class JobModel {
   final String id;
   final String businessName;
@@ -67,10 +69,8 @@ class JobModel {
   String get title => businessName;
   String get companyName => businessName;
   String get employmentType => schedule;
-  double get salaryAmount =>
-      double.tryParse(
-          salary.replaceAll(RegExp(r'[^0-9.,]'), '').replaceAll(',', '.')) ??
-      0.0;
+  double get salaryAmount => (parseSalaryText(salary).lower ?? 0).toDouble();
+  SalaryRange get salaryRange => parseSalaryText(salary);
   double get lat => latitude;
   double get lng => longitude;
   bool get isVerified => adStatus == 'active' && hasVacancy;
@@ -135,8 +135,7 @@ class JobModel {
           _stringValue(json, ['phone_whatsapp', 'phone', 'whatsapp'], ''),
       contactPerson: _stringValue(json, ['contact_person'], ''),
       hasVacancy: _boolValue(json, ['has_vacancy', 'is_vacancy'], true),
-      salary: _stringValue(
-          json, ['salary'], _stringValue(json, ['salary_amount'], '0')),
+      salary: formatSalaryText(parseSalary(json)) ?? '0',
       schedule: _stringValue(
           json, ['schedule', 'employment_type', 'job_type'], 'Tam iş günü'),
       address: _stringValue(json, ['address'], ''),

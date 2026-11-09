@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/app_language.dart';
+import '../utils/salary_utils.dart';
+
 class EmployerDashboardScreen extends StatefulWidget {
   const EmployerDashboardScreen({Key? key}) : super(key: key);
 
@@ -137,7 +140,7 @@ class _EmployerDashboardScreenState extends State<EmployerDashboardScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text('Namizəd: İş Axtaran Namizəd', style: TextStyle(color: Colors.grey.shade700, fontSize: 14, fontWeight: FontWeight.w500)),
-                            Text('Maaş: ${job['salary_amount'] ?? 0} AZN', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                            Text('Maaş: ${formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'))}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                             const Divider(height: 24),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,

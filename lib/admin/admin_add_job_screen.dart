@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../utils/salary_utils.dart';
 
 class AdminAddJobScreen extends StatefulWidget {
   const AdminAddJobScreen({Key? key}) : super(key: key);
@@ -11,7 +14,8 @@ class AdminAddJobScreen extends StatefulWidget {
 class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _salaryController = TextEditingController();
+  final _salaryMinController = TextEditingController();
+  final _salaryMaxController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
   
@@ -21,12 +25,27 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
   bool _isLoading = false;
 
   Future<void> _submitJob() async {
-    if (_titleController.text.isEmpty || _salaryController.text.isEmpty) {
+    if (_titleController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Xanaları tam doldurun')),
       );
       return;
     }
+
+    final salaryError = validateSalaryInputs(
+      _salaryMinController.text,
+      _salaryMaxController.text,
+      invalidMessage: 'Düzgün maaş daxil edin',
+      orderMessage: 'Minimum maaş maksimum maaşdan böyük ola bilməz',
+    );
+    if (salaryError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(salaryError)),
+      );
+      return;
+    }
+    final salary =
+        salaryFromInputs(_salaryMinController.text, _salaryMaxController.text);
 
     setState(() => _isLoading = true);
     try {
@@ -38,8 +57,8 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
         'description': _descriptionController.text.trim(),
         'category': _category,
         'employment_type': _employmentType,
-        'salary_amount': double.parse(_salaryController.text),
-        'salary_type': _salaryType,
+        ...salaryPayload(salary),
+        'salary_type': salary.isEmpty ? negotiableSalaryType : _salaryType,
         'location': 'POINT($lng $lat)',
         'is_active': true,
         'user_id': Supabase.instance.client.auth.currentUser?.id,
@@ -50,7 +69,8 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
         const SnackBar(content: Text('Yeni elan uğurla əlavə olundu!')),
       );
       _titleController.clear();
-      _salaryController.clear();
+      _salaryMinController.clear();
+      _salaryMaxController.clear();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Xəta: $e')),
@@ -64,7 +84,8 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _salaryController.dispose();
+    _salaryMinController.dispose();
+    _salaryMaxController.dispose();
     _latController.dispose();
     _lngController.dispose();
     super.dispose();
@@ -87,7 +108,29 @@ class _AdminAddJobScreenState extends State<AdminAddJobScreen> {
               decoration: const InputDecoration(labelText: 'Description / Job Details', alignLabelWithHint: true),
             ),
             const SizedBox(height: 12),
-            TextField(controller: _salaryController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Məbləğ (AZN)')),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _salaryMinController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    maxLength: 6,
+                    decoration: const InputDecoration(labelText: 'Minimum maaş (AZN)', counterText: ''),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _salaryMaxController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    maxLength: 6,
+                    decoration: const InputDecoration(labelText: 'Maksimum maaş (AZN)', counterText: ''),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             TextField(controller: _latController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Enlik (Latitude e.g. 40.4092)')),
             const SizedBox(height: 12),

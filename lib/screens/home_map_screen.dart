@@ -24,6 +24,7 @@ import 'auth_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import '../utils/contact_utils.dart';
+import '../utils/salary_utils.dart';
 import '../utils/vip_utils.dart';
 import '../widgets/language_theme_controls.dart';
 
@@ -72,7 +73,7 @@ Widget _buildMarkerWidget(Map<String, dynamic> job) {
   // Safe bool parse for VIP/Verified status
   final isVip = isJobVipActive(job) || job['is_verified'] == true;
 
-  final salary = job['salary'] ?? '0';
+  final salary = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
 
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -94,7 +95,7 @@ Widget _buildMarkerWidget(Map<String, dynamic> job) {
             size: 12, color: const Color(0xFF94A3B8)),
         const SizedBox(width: 4),
         Text(
-          '$salary ₼',
+          salary,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 11,
@@ -409,7 +410,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       if (point != null) {
         final isVip = _jobIsVipActive(job);
         final jobId = job['id']?.toString() ?? UniqueKey().toString();
-        final salaryLabel = _formatMarkerSalary(job['salary']);
+        final salaryLabel = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
         final categoryIcon = _markerCategoryIcon(job);
         final markerKey =
             '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}';
@@ -602,29 +603,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return double.tryParse(text);
   }
 
-  double _jobSalary(Map<String, dynamic> job) {
-    final value = job['salary'] ?? job['salary_amount'];
-    final directValue = _safeParseDouble(value);
-    if (directValue != null) return directValue;
-
-    final text = value?.toString().trim() ?? '';
-    final match = RegExp(r'(\d+(?:[\.,]\d+)?)').firstMatch(text);
-    if (match != null) {
-      final parsed = double.tryParse(match.group(1)!.replaceAll(',', '.'));
-      if (parsed != null) return parsed;
-    }
-
-    return 0.0;
-  }
-
   String _jobSalaryString(Map<String, dynamic> job) {
-    final value = job['salary'] ?? job['salary_text'] ?? job['salary_amount'];
-    final text = value?.toString().trim() ?? '';
-    if (text.isEmpty) {
-      final salary = _jobSalary(job);
-      return salary <= 0 ? 'Razılaşma ilə' : '${salary.round()} ₼';
-    }
-    return text.contains('₼') ? text : '$text ₼';
+    return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
   }
 
   String _jobBusinessName(Map<String, dynamic> job) {
@@ -707,8 +687,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   String _jobSalaryLabel(Map<String, dynamic> job) {
-    final salary = _jobSalary(job);
-    return salary <= 0 ? 'Razılaşma ilə' : '${salary.round()} ₼';
+    return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
   }
 
   List<Map<String, dynamic>> get _jobs => _filteredJobs;
@@ -928,7 +907,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final job = item.job;
     final jobId = job['id']?.toString() ?? cluster.getId();
     final isVip = _jobIsVipActive(job);
-    final salaryLabel = _formatMarkerSalary(job['salary']);
+    final salaryLabel = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
     final categoryIcon = _markerCategoryIcon(job);
     final icon = _singleMarkerIcons[
             '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}'] ??=
@@ -1058,19 +1037,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         : Icons.work_outline_rounded;
   }
 
-  String _formatMarkerSalary(dynamic salaryValue) {
-    final raw = salaryValue?.toString().trim() ?? '';
-    if (raw.isEmpty) return '0 ₼';
-
-    final cleaned = raw
-        .replaceAll(RegExp(r'\b(AZN|MANAT)\b', caseSensitive: false), '')
-        .replaceAll('₼', '')
-        .trim()
-        .replaceAll(RegExp(r'\s+'), ' ');
-
-    return cleaned.isEmpty ? '0 ₼' : '$cleaned ₼';
-  }
-
   IconData _markerCategoryIcon(Map<String, dynamic> job) {
     final raw = [
       job['category'],
@@ -1177,7 +1143,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final company = _jobText(job, 'company_name', 'Şirkət').toLowerCase();
       final category = _jobCategory(job).toLowerCase();
       final district = _jobText(job, 'district', '').toLowerCase();
-      final salary = _jobSalary(job);
       final distance = _calculateDistance(_mapCenter, point);
 
       if (!_categoryMatches(job)) {
@@ -1206,8 +1171,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       }
 
       final aboveMax =
-          _salaryRange.end < _salaryMax && salary > _salaryRange.end;
-      if (salary < _salaryRange.start || aboveMax) {
+          _salaryRange.end < _salaryMax ? _salaryRange.end : null;
+      if (!salaryOverlaps(parseSalary(job),
+          filterMin: _salaryRange.start, filterMax: aboveMax)) {
         salaryRejected++;
         continue;
       }
@@ -2616,7 +2582,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                               subtitle: Text(
                                   '${_jobText(job, 'company_name', 'Şirkət')} • ${_jobText(job, 'address', 'Bakı')}',
                                   style: const TextStyle(fontSize: 12)),
-                              trailing: Text('${job['salary']} ₼',
+                              trailing: Text(_jobSalaryLabel(job),
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF2563EB))),
