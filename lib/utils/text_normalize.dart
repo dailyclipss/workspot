@@ -30,6 +30,11 @@ String normalizeAz(String? input) {
   return buffer.toString().replaceAll(_separators, ' ').trim();
 }
 
+/// Looser key for transliteration variants (ə is often written as "a" in
+/// Latin names, e.g. Narimanov ≈ Nərimanov): normalizeAz plus e→a.
+String normalizeAzLoose(String? input) =>
+    normalizeAz(input).replaceAll('e', 'a');
+
 /// True when [needle] occurs in [haystack] as whole words (both normalized).
 bool containsWords(String haystack, String needle) {
   if (needle.isEmpty) return false;
