@@ -21,10 +21,12 @@ WHERE salary_min IS NULL
   AND salary ~* '^\s*\d{1,7}\s*(AZN|₼|manat)?\s*$'
   AND (regexp_match(salary, '^\s*(\d{1,7})', ''))[1]::int > 0;
 
--- Negotiable jobs: salary_amount 0 -> NULL and salary_type 'negotiable', only when
+-- Negotiable jobs: salary_amount 0 -> NULL, salary text 'Razılaşma ilə' and
+-- salary_type 'negotiable', only when
 -- no range exists and the salary text is empty or says "razılaşma" / "razilasma".
 UPDATE public.jobs
 SET salary_amount = NULL,
+    salary = 'Razılaşma ilə',
     salary_type = 'negotiable'
 WHERE salary_amount = 0
   AND salary_min IS NULL
