@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -11,6 +12,7 @@ import '../services/notification_service.dart';
 import '../services/presence_service.dart';
 import '../widgets/online_users_badge.dart';
 import '../services/job_location_resolver.dart';
+import '../utils/salary_utils.dart';
 import '../utils/vip_utils.dart';
 import 'auth_screen.dart';
 import 'home_map_screen.dart';
@@ -195,23 +197,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   String _jobDistrict(Map<String, dynamic> job) => _jobText(job, 'district', '—');
 
-  num? _jobSalaryValue(Map<String, dynamic> job) {
-    for (final key in const ['salary_amount', 'salary']) {
-      final raw = job[key];
-      if (raw == null) continue;
-      if (raw is num) return raw;
-      final parsed = double.tryParse(
-        raw.toString().replaceAll(RegExp(r'[^0-9,\.]'), '').replaceAll(',', '.'),
-      );
-      if (parsed != null) return parsed;
-    }
-    return null;
-  }
-
   String _jobSalaryLabel(Map<String, dynamic> job) {
-    final value = _jobSalaryValue(job);
-    if (value == null || value <= 0) return 'Razılaşma ilə';
-    return '${value == value.roundToDouble() ? value.toInt() : value} ₼';
+    return formatSalaryDisplay(parseSalary(job));
   }
 
   String _jobAdStatus(Map<String, dynamic> job) {
@@ -511,11 +498,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final phoneController = TextEditingController(text: _jobText(job, 'phone_whatsapp', ''));
     final instagramController = TextEditingController(text: _jobText(job, 'instagram', ''));
     final contactController = TextEditingController(text: _jobText(job, 'contact_person', ''));
-    final existingSalary = _jobSalaryValue(job);
-    final salaryController = TextEditingController(
-      text: existingSalary == null || existingSalary <= 0
-          ? ''
-          : '${existingSalary == existingSalary.roundToDouble() ? existingSalary.toInt() : existingSalary}',
+    final existingSalary = parseSalary(job);
+    final salaryMinController = TextEditingController(
+      text: existingSalary.min?.toString() ?? '',
+    );
+    final salaryMaxController = TextEditingController(
+      text: existingSalary.max?.toString() ?? '',
     );
     final formKey = GlobalKey<FormState>();
     final resolvedLocation = JobLocationResolver.ensureCoordinates(job);
@@ -629,17 +617,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(height: 12),
                           _sheetField(districtController, 'Rayon'),
                           const SizedBox(height: 12),
-                          TextFormField(
-                            controller: salaryController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            style: const TextStyle(color: Colors.white),
-                            decoration: _sheetDecoration('Maaş (AZN) — boş = Razılaşma ilə'),
-                            validator: (value) {
-                              final text = value?.trim() ?? '';
-                              if (text.isEmpty) return null;
-                              final parsed = double.tryParse(text.replaceAll(',', '.'));
-                              return parsed == null || parsed < 0 ? 'Düzgün maaş daxil edin' : null;
-                            },
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: salaryMinController,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  maxLength: 6,
+                                  style: const TextStyle(color: Colors.white),
+                                  decoration: _sheetDecoration('Minimum maaş (AZN)').copyWith(counterText: ''),
+                                  validator: (_) => validateSalaryInputs(
+                                    salaryMinController.text,
+                                    salaryMaxController.text,
+                                    invalidMessage: 'Düzgün maaş daxil edin',
+                                    orderMessage: 'Minimum maaş maksimum maaşdan böyük ola bilməz',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: salaryMaxController,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  maxLength: 6,
+                                  style: const TextStyle(color: Colors.white),
+                                  decoration: _sheetDecoration('Maksimum maaş (AZN)').copyWith(counterText: ''),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
                           _sheetField(addressController, 'Ünvan'),
@@ -767,14 +775,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   : () async {
                                       final navigator = Navigator.of(sheetContext);
                                       if (!formKey.currentState!.validate()) return;
-                                      final salaryText = salaryController.text.trim().replaceAll(',', '.');
-                                      final salaryParsed = salaryText.isEmpty ? 0.0 : double.parse(salaryText);
-                                      final salaryNum = salaryParsed == salaryParsed.roundToDouble()
-                                          ? salaryParsed.toInt()
-                                          : salaryParsed;
+                                      final salaryValues = salaryPayload(salaryFromInputs(
+                                          salaryMinController.text, salaryMaxController.text));
                                       await _updateJob(jobId, {
-                                        'salary_amount': salaryNum,
-                                        'salary': salaryNum.toString(),
+                                        ...salaryValues,
                                         'business_name': businessController.text.trim(),
                                         'company_name': businessController.text.trim(),
                                         'category': categoryController.text.trim(),

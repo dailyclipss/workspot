@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/app_language.dart';
+import '../utils/salary_utils.dart';
 import 'add_job_screen.dart';
 import 'home_map_screen.dart';
 
@@ -198,7 +199,7 @@ class _BusinessDashboardScreenState extends State<BusinessDashboardScreen> {
               ],
             ),
           ),
-          Text('${job['salary_amount'] ?? job['salary'] ?? 0}',
+          Text(formatSalaryDisplay(parseSalary(job)),
               style: const TextStyle(
                   color: Color(0xFF60A5FA), fontWeight: FontWeight.bold)),
         ],

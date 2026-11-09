@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/app_language.dart';
 import '../services/geocoding_service.dart';
 import '../services/job_location_resolver.dart';
+import '../utils/salary_utils.dart';
 import '../core/services/location_service.dart';
 import '../widgets/location_pin_marker.dart';
 import 'job_payment_screen.dart';
@@ -35,7 +36,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _contactPersonController = TextEditingController();
   final TextEditingController _instagramController = TextEditingController();
-  final TextEditingController _salaryController = TextEditingController();
+  final TextEditingController _salaryMinController = TextEditingController();
+  final TextEditingController _salaryMaxController = TextEditingController();
 
   final List<_CategoryOption> _categories = const [
     _CategoryOption('Restoran & Kafe', Icons.restaurant_rounded),
@@ -116,7 +118,8 @@ class _AddJobScreenState extends State<AddJobScreen> {
     _phoneController.dispose();
     _contactPersonController.dispose();
     _instagramController.dispose();
-    _salaryController.dispose();
+    _salaryMinController.dispose();
+    _salaryMaxController.dispose();
     super.dispose();
   }
 
@@ -302,11 +305,9 @@ class _AddJobScreenState extends State<AddJobScreen> {
         ),
       };
 
-  num _salaryAmountValue() {
-    if (_salaryByAgreement) return 0;
-    final numeric = _salaryController.text.replaceAll(RegExp(r'[^0-9,\.]'), '').replaceAll(',', '.');
-    final parsed = double.tryParse(numeric) ?? 0;
-    return parsed == parsed.roundToDouble() ? parsed.toInt() : parsed;
+  SalaryRange _salaryRangeValue() {
+    if (_salaryByAgreement) return SalaryRange.empty;
+    return salaryFromInputs(_salaryMinController.text, _salaryMaxController.text);
   }
 
   String? _requiredValidator(String? value, String message) {
@@ -323,14 +324,12 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
   String? _salaryValidator(String? value) {
     if (_salaryByAgreement) return null;
-    if (value == null || value.trim().isEmpty) {
-      return appLang.translate('aj_salary_req');
-    }
-    final numeric = value.replaceAll(RegExp(r'[^0-9,\.]'), '');
-    if (double.tryParse(numeric.replaceAll(',', '.')) == null) {
-      return appLang.translate('aj_salary_invalid');
-    }
-    return null;
+    return validateSalaryInputs(
+      _salaryMinController.text,
+      _salaryMaxController.text,
+      invalidMessage: appLang.translate('aj_salary_invalid'),
+      orderMessage: appLang.translate('aj_salary_order'),
+    );
   }
 
   Map<String, dynamic> _buildJobPayload() {
@@ -354,8 +353,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
       'category': _selectedCategory ?? 'Xidmət',
       'district': districtValue,
       'description': _descriptionController.text.trim(),
-      'salary_amount': _salaryAmountValue(),
-      'salary': _salaryAmountValue().toString(),
+      ...salaryPayload(_salaryRangeValue()),
       'phone_whatsapp': _phoneController.text.trim(),
       'contact_person': _contactPersonController.text.trim(),
       'instagram': _instagramController.text.trim(),
@@ -598,26 +596,37 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     children: [
                       Expanded(
                         child: TextFormField(
-                          controller: _salaryController,
+                          controller: _salaryMinController,
                           enabled: !_salaryByAgreement,
                           keyboardType: TextInputType.number,
-                          decoration: _fieldDecoration(appLang.translate('aj_salary'), appLang.translate('aj_salary_hint'), Icons.attach_money_rounded),
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          maxLength: 6,
+                          decoration: _fieldDecoration(appLang.translate('aj_salary_min'), appLang.translate('aj_salary_min_hint'), Icons.attach_money_rounded).copyWith(counterText: ''),
                           validator: _salaryValidator,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      SizedBox(
-                        width: 150,
-                        child: CheckboxListTile(
-                          value: _salaryByAgreement,
-                          onChanged: (value) => setState(() => _salaryByAgreement = value ?? false),
-                          title: Text(appLang.translate('aj_salary_agreement'), style: const TextStyle(fontSize: 12.5)),
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
+                      Expanded(
+                        child: TextFormField(
+                          controller: _salaryMaxController,
+                          enabled: !_salaryByAgreement,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          maxLength: 6,
+                          decoration: _fieldDecoration(appLang.translate('aj_salary_max'), appLang.translate('aj_salary_max_hint'), Icons.attach_money_rounded).copyWith(counterText: ''),
+                          validator: _salaryValidator,
                         ),
                       ),
                     ],
+                  ),
+                  CheckboxListTile(
+                    value: _salaryByAgreement,
+                    onChanged: (value) => setState(() => _salaryByAgreement = value ?? false),
+                    title: Text(appLang.translate('aj_salary_agreement'), style: const TextStyle(fontSize: 12.5)),
+                    subtitle: Text(appLang.translate('aj_salary_optional_note'), style: const TextStyle(fontSize: 11)),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
