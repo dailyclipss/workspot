@@ -6,9 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/category.dart';
+import '../models/district.dart';
 import '../services/app_language.dart';
 import '../services/geocoding_service.dart';
 import '../services/job_location_resolver.dart';
+import '../services/reference_data_service.dart';
+import '../widgets/reference_pickers.dart';
 import '../utils/salary_utils.dart';
 import '../core/services/location_service.dart';
 import '../widgets/location_pin_marker.dart';
@@ -39,34 +43,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
   final TextEditingController _salaryMinController = TextEditingController();
   final TextEditingController _salaryMaxController = TextEditingController();
 
-  final List<_CategoryOption> _categories = const [
-    _CategoryOption('Restoran & Kafe', Icons.restaurant_rounded),
-    _CategoryOption('İT', Icons.code_rounded),
-    _CategoryOption('Satış', Icons.storefront_rounded),
-    _CategoryOption('Səhiyyə və Tibb', Icons.medical_services_rounded),
-    _CategoryOption('Logistika', Icons.local_shipping_rounded),
-    _CategoryOption('Müştəri Xidmətləri', Icons.headset_mic_rounded),
-    _CategoryOption('Tikinti', Icons.construction_rounded),
-    _CategoryOption('Təhsil', Icons.school_rounded),
-    _CategoryOption('Gözəllik', Icons.content_cut_rounded),
-    _CategoryOption('Dizayn', Icons.palette_outlined),
-  ];
-
-  final List<String> _districts = const [
-    'Nərimanov',
-    '28 May',
-    'Yasamal',
-    'Gənclik',
-    'Xətai',
-    'Nizami',
-    'Səbail',
-    'Binəqədi',
-    'Nəsimi',
-    'Suraxanı',
-    'Sabunçu',
-    'Koroğlu',
-    'İçərişəhər',
-  ];
+  final ReferenceDataService _ref = ReferenceDataService.instance;
 
   final List<String> _schedules = const [
     'Tam iş günü',
@@ -75,8 +52,10 @@ class _AddJobScreenState extends State<AddJobScreen> {
     'Tələbələr üçün',
   ];
 
-  String? _selectedCategory;
-  String? _selectedDistrict;
+  JobCategory? _selectedCategory;
+  District? _selectedDistrict;
+  bool _districtAuto = false;
+  bool _districtManual = false;
   String? _selectedSchedule;
   bool _salaryByAgreement = false;
   bool _hasVacancy = true;
@@ -85,7 +64,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
   bool _isLocating = false;
   bool _hasExplicitLocation = false;
   LatLng _selectedLocation = _defaultLocation;
-  String _selectedDistrictPreview = 'Nərimanov';
   Timer? _searchDebounce;
   List<AddressSuggestion> _suggestions = const [];
   bool _isSearchingAddress = false;
@@ -101,16 +79,16 @@ class _AddJobScreenState extends State<AddJobScreen> {
       if (mounted && icon != null) setState(() => _pinIcon = icon);
     });
     appLang.addListener(_onLanguageChanged);
-    _selectedCategory = _categories.first.label;
-    _selectedDistrict = _districts.first;
     _selectedSchedule = _schedules.first;
-    _selectedDistrictPreview = _districts.first;
+    _ref.addListener(_onLanguageChanged);
+    _ref.load();
   }
 
   @override
   void dispose() {
     _searchDebounce?.cancel();
     appLang.removeListener(_onLanguageChanged);
+    _ref.removeListener(_onLanguageChanged);
     _businessNameController.dispose();
     _titleController.dispose();
     _addressController.dispose();
@@ -132,8 +110,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
     _addressSearchRequestId++;
     setState(() {
       _selectedLocation = point;
-      _selectedDistrictPreview = _districtFromLocation(point);
-      _selectedDistrict ??= _selectedDistrictPreview;
+      _applyDistrictGuess(point);
       _hasExplicitLocation = true;
       _suggestions = const [];
       _isSearchingAddress = false;
@@ -148,7 +125,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
     _geocodeRequestId++;
     setState(() {
       _selectedLocation = point;
-      _selectedDistrictPreview = _districtFromLocation(point);
+      _applyDistrictGuess(point);
       _hasExplicitLocation = true;
       _suggestions = const [];
       _isSearchingAddress = false;
@@ -160,8 +137,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
     _addressSearchRequestId++;
     setState(() {
       _selectedLocation = point;
-      _selectedDistrictPreview = _districtFromLocation(point);
-      _selectedDistrict = _districts.contains(_selectedDistrictPreview) ? _selectedDistrictPreview : _selectedDistrict;
+      _applyDistrictGuess(point);
       _hasExplicitLocation = true;
       _suggestions = const [];
       _isSearchingAddress = false;
@@ -183,8 +159,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
       _geocodeRequestId++;
       setState(() {
         _selectedLocation = point;
-        _selectedDistrictPreview = _districtFromLocation(point);
-        _selectedDistrict ??= _selectedDistrictPreview;
+        _applyDistrictGuess(point);
         _hasExplicitLocation = true;
         _suggestions = const [];
         _isSearchingAddress = false;
@@ -205,14 +180,38 @@ class _AddJobScreenState extends State<AddJobScreen> {
     }
   }
 
-  String? _matchDistrict(String? name) {
-    if (name == null) return null;
-    final lower = name.toLowerCase();
-    for (final district in _districts) {
-      final d = district.toLowerCase();
-      if (lower.contains(d) || d.contains(lower)) return district;
+  void _setAutoDistrict(District district) {
+    if (_districtManual) return;
+    _selectedDistrict = district;
+    _districtAuto = true;
+  }
+
+  // Coarse central-Baku guess; replaced by the geocoder result when it arrives.
+  void _applyDistrictGuess(LatLng point) {
+    if (_districtManual) return;
+    if (_selectedDistrict != null && !_districtAuto) return;
+    final guess = _ref.districtFromLocation(point.latitude, point.longitude);
+    if (guess != null) _setAutoDistrict(guess);
+  }
+
+  Future<void> _pickCategory() async {
+    final result =
+        await showCategoryPicker(context, selectedId: _selectedCategory?.id);
+    if (result?.value != null && mounted) {
+      setState(() => _selectedCategory = result!.value);
     }
-    return null;
+  }
+
+  Future<void> _pickDistrict() async {
+    final result =
+        await showDistrictPicker(context, selectedId: _selectedDistrict?.id);
+    if (result != null && mounted) {
+      setState(() {
+        _selectedDistrict = result;
+        _districtManual = true;
+        _districtAuto = false;
+      });
+    }
   }
 
   Future<void> _reverseGeocode(LatLng point) async {
@@ -226,14 +225,11 @@ class _AddJobScreenState extends State<AddJobScreen> {
     _suppressAddressSearch = true;
     _addressController.text = result.displayName;
     _suppressAddressSearch = false;
-    final matched = _matchDistrict(result.district);
+    final matched = _ref.matchDistrict(result.district);
     setState(() {
       _isSearchingAddress = false;
       _suggestions = const [];
-      if (matched != null) {
-        _selectedDistrict = matched;
-        _selectedDistrictPreview = matched;
-      }
+      if (matched != null) _setAutoDistrict(matched);
     });
   }
 
@@ -271,26 +267,18 @@ class _AddJobScreenState extends State<AddJobScreen> {
     _suppressAddressSearch = true;
     _addressController.text = suggestion.displayName;
     _suppressAddressSearch = false;
-    final matched = _matchDistrict(suggestion.district);
+    final matched = _ref.matchDistrict(suggestion.district);
     setState(() {
       _selectedLocation = point;
-      _selectedDistrictPreview = matched ?? _districtFromLocation(point);
-      _selectedDistrict = matched ?? _selectedDistrict;
+      if (matched != null) {
+        _setAutoDistrict(matched);
+      } else {
+        _applyDistrictGuess(point);
+      }
       _hasExplicitLocation = true;
       _suggestions = const [];
     });
     _mapController?.animateCamera(gmaps.CameraUpdate.newLatLngZoom(point, 16.5));
-  }
-
-  String _districtFromLocation(LatLng point) {
-    final lat = point.latitude;
-    final lng = point.longitude;
-    if (lat >= 40.40 && lng >= 49.86) return 'Nərimanov';
-    if (lat >= 40.37 && lat < 40.40 && lng >= 49.83 && lng < 49.86) return '28 May';
-    if (lat >= 40.36 && lng < 49.84) return 'Yasamal';
-    if (lat >= 40.39 && lng < 49.81) return 'Nizami';
-    if (lat < 40.37 && lng >= 49.84) return 'Xətai';
-    return 'Bakı';
   }
 
   Set<gmaps.Marker> get _locationMarkers => {
@@ -337,7 +325,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
         ? 'Test Müəssisə'
         : _businessNameController.text.trim();
     final title = _titleController.text.trim().isEmpty ? 'Yeni Vakansiya' : _titleController.text.trim();
-    final districtValue = (_selectedDistrict?.trim().isNotEmpty ?? false) ? _selectedDistrict!.trim() : 'Nərimanov';
+    final districtValue = _selectedDistrict?.nameAz ?? '';
     final latitude = _hasExplicitLocation ? _selectedLocation.latitude : null;
     final longitude = _hasExplicitLocation ? _selectedLocation.longitude : null;
     final resolvedLocation = JobLocationResolver.resolve(
@@ -350,8 +338,10 @@ class _AddJobScreenState extends State<AddJobScreen> {
     return <String, dynamic>{
       'business_name': businessName,
       'title': title,
-      'category': _selectedCategory ?? 'Xidmət',
+      'category': _selectedCategory?.nameAz ?? 'Xidmət',
+      'category_id': _selectedCategory?.id,
       'district': districtValue,
+      'district_id': _selectedDistrict?.id,
       'description': _descriptionController.text.trim(),
       ...salaryPayload(_salaryRangeValue()),
       'phone_whatsapp': _phoneController.text.trim(),
@@ -426,7 +416,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
           if (missingColumn == 'district') {
             final districtValue = (payload['district']?.toString().trim().isNotEmpty ?? false)
                 ? payload['district'].toString().trim()
-                : 'Nərimanov';
+                : (_selectedDistrict?.nameAz ?? '');
             final addressValue = _addressController.text.trim();
             workingPayload['address'] = addressValue.isEmpty ? 'Rayon: $districtValue' : '$addressValue | Rayon: $districtValue';
           }
@@ -516,38 +506,84 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     validator: (value) => _requiredValidator(value, appLang.translate('aj_title_req')),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _selectedCategory,
-                    dropdownColor: scheme.surface,
-                    iconEnabledColor: scheme.onSurfaceVariant,
-                    style: TextStyle(color: scheme.onSurface, fontSize: 15),
-                    decoration: _fieldDecoration(appLang.translate('aj_category'), appLang.translate('aj_category_hint'), Icons.category_rounded),
-                    items: [
-                      for (var i = 0; i < _categories.length; i++)
-                        DropdownMenuItem<String>(
-                          value: _categories[i].label,
-                          child: Text(appLang.translate('aj_cat_$i')),
+                  FormField<JobCategory>(
+                    validator: (_) => _selectedCategory == null
+                        ? appLang.translate('aj_category_req')
+                        : null,
+                    builder: (state) => InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () async {
+                        await _pickCategory();
+                        state.didChange(_selectedCategory);
+                      },
+                      child: InputDecorator(
+                        decoration: _fieldDecoration(
+                          appLang.translate('aj_category'),
+                          appLang.translate('aj_category_hint'),
+                          Icons.category_rounded,
+                        ).copyWith(
+                          errorText: state.errorText,
+                          suffixIcon: const Icon(Icons.arrow_drop_down),
                         ),
-                    ],
-                    onChanged: (value) => setState(() => _selectedCategory = value),
-                    validator: (value) => _requiredValidator(value, appLang.translate('aj_category_req')),
+                        child: Text(
+                          _selectedCategory?.localizedName(appLang.currentLanguage) ??
+                              appLang.translate('ref_not_selected'),
+                          style: TextStyle(
+                            color: _selectedCategory == null
+                                ? scheme.onSurfaceVariant
+                                : scheme.onSurface,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _selectedDistrict,
-                    dropdownColor: scheme.surface,
-                    iconEnabledColor: scheme.onSurfaceVariant,
-                    style: TextStyle(color: scheme.onSurface, fontSize: 15),
-                    decoration: _fieldDecoration(appLang.translate('aj_district'), appLang.translate('aj_district_hint'), Icons.location_city_rounded),
-                    items: [
-                      for (var i = 0; i < _districts.length; i++)
-                        DropdownMenuItem<String>(
-                          value: _districts[i],
-                          child: Text(appLang.translate('aj_dist_$i')),
+                  FormField<District>(
+                    validator: (_) => _selectedDistrict == null
+                        ? appLang.translate('aj_district_req')
+                        : null,
+                    builder: (state) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () async {
+                            await _pickDistrict();
+                            state.didChange(_selectedDistrict);
+                          },
+                          child: InputDecorator(
+                            decoration: _fieldDecoration(
+                              appLang.translate('aj_district'),
+                              appLang.translate('aj_district_hint'),
+                              Icons.location_city_rounded,
+                            ).copyWith(
+                              errorText: state.errorText,
+                              suffixIcon: const Icon(Icons.arrow_drop_down),
+                            ),
+                            child: Text(
+                              _selectedDistrict?.localizedName(appLang.currentLanguage) ??
+                                  appLang.translate('ref_district_pick_hint'),
+                              style: TextStyle(
+                                color: _selectedDistrict == null
+                                    ? scheme.onSurfaceVariant
+                                    : scheme.onSurface,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
                         ),
-                    ],
-                    onChanged: (value) => setState(() => _selectedDistrict = value),
-                    validator: (value) => _requiredValidator(value, appLang.translate('aj_district_req')),
+                        if (_districtAuto && _selectedDistrict != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4, left: 12),
+                            child: Text(
+                              appLang.translate('ref_district_auto'),
+                              style: TextStyle(
+                                  fontSize: 12, color: scheme.primary),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -853,13 +889,6 @@ class _AddJobScreenState extends State<AddJobScreen> {
       ),
     );
   }
-}
-
-class _CategoryOption {
-  final String label;
-  final IconData icon;
-
-  const _CategoryOption(this.label, this.icon);
 }
 
 class _AzerbaijanPhoneFormatter extends TextInputFormatter {
