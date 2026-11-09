@@ -1,3 +1,4 @@
+import '../services/reference_data_service.dart';
 import '../utils/salary_utils.dart';
 
 class JobModel {
@@ -5,6 +6,8 @@ class JobModel {
   final String businessName;
   final String category;
   final String district;
+  final int? categoryId;
+  final int? districtId;
   final String instagram;
   final String phoneWhatsapp;
   final String contactPerson;
@@ -26,6 +29,8 @@ class JobModel {
     String? businessName,
     String? category,
     String? district,
+    this.categoryId,
+    this.districtId,
     String? instagram,
     String? phoneWhatsapp,
     String? contactPerson,
@@ -48,7 +53,7 @@ class JobModel {
     double? lat,
     double? lng,
   })  : businessName = businessName ?? companyName ?? title ?? 'Məkan / Şirkət',
-        category = category ?? 'General',
+        category = category ?? '',
         district = district ?? '',
         instagram = instagram ?? '',
         phoneWhatsapp = phoneWhatsapp ?? '',
@@ -128,7 +133,9 @@ class JobModel {
           json,
           ['business_name', 'company_name', 'company', 'title'],
           'Məkan / Şirkət'),
-      category: _stringValue(json, ['category'], 'General'),
+      category: _stringValue(json, ['category'], ''),
+      categoryId: ReferenceDataService.asId(json['category_id']),
+      districtId: ReferenceDataService.asId(json['district_id']),
       district: _stringValue(json, ['district'], ''),
       instagram: _stringValue(json, ['instagram'], ''),
       phoneWhatsapp:

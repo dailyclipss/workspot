@@ -7,6 +7,10 @@ import '../admin/admin_approval_screen.dart';
 import '../core/services/location_service.dart';
 import '../services/admin_auth_service.dart';
 import '../services/app_language.dart';
+import '../models/category.dart';
+import '../models/district.dart';
+import '../services/reference_data_service.dart';
+import '../widgets/reference_pickers.dart';
 import '../services/geocoding_service.dart';
 import '../services/notification_service.dart';
 import '../services/presence_service.dart';
@@ -52,6 +56,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    ReferenceDataService.instance.load();
     _bootstrap();
   }
   Future<void> _bootstrap() async {
@@ -193,9 +198,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return _jobText(job, 'business_name', _jobText(job, 'company_name', _jobText(job, 'title', 'Şirkət')));
   }
 
-  String _jobCategory(Map<String, dynamic> job) => _jobText(job, 'category', '—');
+  String _jobCategory(Map<String, dynamic> job) =>
+      ReferenceDataService.instance.categoryLabel(job, fallback: '—');
 
-  String _jobDistrict(Map<String, dynamic> job) => _jobText(job, 'district', '—');
+  String _jobDistrict(Map<String, dynamic> job) =>
+      ReferenceDataService.instance.districtLabel(job, fallback: '—');
 
   String _jobSalaryLabel(Map<String, dynamic> job) {
     return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
@@ -491,8 +498,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _openEditJobSheet(Map<String, dynamic> job) async {
     final jobId = job['id'].toString();
     final businessController = TextEditingController(text: _jobBusinessName(job));
-    final categoryController = TextEditingController(text: _jobCategory(job));
-    final districtController = TextEditingController(text: _jobDistrict(job));
+    final refData = ReferenceDataService.instance;
+    JobCategory? selectedCategory = refData.categoryOfJob(job);
+    District? selectedDistrict = refData.districtOfJob(job);
+    final originalCategoryText = _jobText(job, 'category', '');
+    final originalDistrictText = _jobText(job, 'district', '');
     final addressController = TextEditingController(text: _jobText(job, 'address', ''));
     final descriptionController = TextEditingController(text: _jobText(job, 'description', ''));
     final phoneController = TextEditingController(text: _jobText(job, 'phone_whatsapp', ''));
@@ -548,10 +558,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     }
                     setSheetState(() {
                       addressController.text = result.displayName;
-                      final district = result.district?.trim();
-                      if (district != null && district.isNotEmpty) {
-                        districtController.text = district;
-                      }
+                      final district = refData.matchDistrict(result.district);
+                      if (district != null) selectedDistrict = district;
                     });
                   }
 
@@ -613,9 +621,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(height: 16),
                           _sheetField(businessController, 'Biznes adı'),
                           const SizedBox(height: 12),
-                          _sheetField(categoryController, 'Kateqoriya'),
+                          _sheetPicker(
+                            'Kateqoriya',
+                            selectedCategory?.nameAz ?? originalCategoryText,
+                            () async {
+                              final r = await showCategoryPicker(sheetContext,
+                                  selectedId: selectedCategory?.id);
+                              if (r?.value != null) {
+                                setSheetState(() => selectedCategory = r!.value);
+                              }
+                            },
+                          ),
                           const SizedBox(height: 12),
-                          _sheetField(districtController, 'Rayon'),
+                          _sheetPicker(
+                            'Rayon',
+                            selectedDistrict?.nameAz ?? originalDistrictText,
+                            () async {
+                              final d = await showDistrictPicker(sheetContext,
+                                  selectedId: selectedDistrict?.id);
+                              if (d != null) {
+                                setSheetState(() => selectedDistrict = d);
+                              }
+                            },
+                          ),
                           const SizedBox(height: 12),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -782,8 +810,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         ...salaryValues,
                                         'business_name': businessController.text.trim(),
                                         'company_name': businessController.text.trim(),
-                                        'category': categoryController.text.trim(),
-                                        'district': districtController.text.trim(),
+                                        if (selectedCategory != null) ...{
+                                          'category_id': selectedCategory!.id,
+                                          'category': selectedCategory!.nameAz,
+                                        },
+                                        if (selectedDistrict != null) ...{
+                                          'district_id': selectedDistrict!.id,
+                                          'district': selectedDistrict!.nameAz,
+                                        },
                                         'address': addressController.text.trim(),
                                         'latitude': selectedLocation.latitude,
                                         'longitude': selectedLocation.longitude,
@@ -815,8 +849,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
 
     businessController.dispose();
-    categoryController.dispose();
-    districtController.dispose();
     addressController.dispose();
     descriptionController.dispose();
     phoneController.dispose();
@@ -838,6 +870,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: _accent, width: 1.2),
+      ),
+    );
+  }
+
+  Widget _sheetPicker(String label, String value, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: _sheetDecoration(label),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                value.isEmpty ? '—' : value,
+                style: const TextStyle(color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, color: _muted),
+          ],
+        ),
       ),
     );
   }
