@@ -15,8 +15,7 @@ workflows:
       - name: Build AAB
         script: |
           flutter build appbundle --release \
-            --build-number=$BUILD_NUMBER \
-            --dart-define=WORKSPOT_ADMIN_PIN=$WORKSPOT_ADMIN_PIN
+            --build-number=$BUILD_NUMBER
     artifacts:
       - build/app/outputs/bundle/release/*.aab
   ios-release:
@@ -59,7 +58,6 @@ workflows:
         script: |
           flutter build ipa --release \
             --build-number=$BUILD_NUMBER \
-            --dart-define=WORKSPOT_ADMIN_PIN=$WORKSPOT_ADMIN_PIN \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa

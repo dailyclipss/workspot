@@ -11,7 +11,7 @@ String _jwt(Map<String, dynamic> claims) {
   return '${enc({'alg': 'HS256'})}.${enc(claims)}.sig';
 }
 
-Session? _session(Map<String, dynamic> claims) => Session(
+Session _session(Map<String, dynamic> claims) => Session(
       accessToken: _jwt(claims),
       tokenType: 'bearer',
       user: const User(
@@ -28,60 +28,76 @@ void main() {
     'app_metadata': {'role': 'admin'}
   });
   final userSession = _session({'app_metadata': {}, 'role': 'authenticated'});
-  final anonSession =
-      _session({'is_anonymous': true, 'role': 'authenticated', 'app_metadata': {}});
-
-  Future<bool> check(Session? s) async => AdminAuthService.hasAdminClaim(s);
-
-  Future<AdminAccess> run(bool web, bool pin, Session? s) =>
-      AdminGate.decide(isWeb: web, pinConfigured: pin, isAdmin: () => check(s));
-
-  group('web, no PIN configured', () {
-    test('admin role is allowed', () async {
-      expect(await run(true, false, adminSession),
-          AdminAccess.allowedWithoutPin);
-    });
-    test('normal user is denied', () async {
-      expect(await run(true, false, userSession), AdminAccess.disabled);
-    });
-    test('anonymous user is denied', () async {
-      expect(await run(true, false, anonSession), AdminAccess.disabled);
-    });
-    test('no session is denied', () async {
-      expect(await run(true, false, null), AdminAccess.disabled);
-    });
-    test('role in user_metadata or top level does not count', () async {
-      final fake = _session({
-        'role': 'admin',
-        'user_metadata': {'role': 'admin'},
-        'app_metadata': {}
-      });
-      expect(await run(true, false, fake), AdminAccess.disabled);
-    });
+  final anonSession = _session(
+      {'is_anonymous': true, 'role': 'authenticated', 'app_metadata': {}});
+  final fakeAdmin = _session({
+    'role': 'admin',
+    'user_metadata': {'role': 'admin'},
+    'app_metadata': {}
   });
 
-  group('mobile unchanged', () {
-    test('no PIN: disabled even for admin, admin check never consulted',
-        () async {
-      var asked = false;
-      final r = await AdminGate.decide(
-        isWeb: false,
-        pinConfigured: false,
-        isAdmin: () async {
-          asked = true;
-          return true;
+  Future<AdminPinResult> run(
+    Session? session,
+    Future<bool> Function(String) rpc, {
+    List<String>? calls,
+  }) =>
+      AdminGate.verify(
+        isAdmin: () async => AdminAuthService.hasAdminClaim(session),
+        verifyPin: (p) {
+          calls?.add(p);
+          return rpc(p);
         },
+        pin: 'entered-pin',
       );
-      expect(r, AdminAccess.disabled);
-      expect(asked, isFalse);
-    });
-    test('PIN configured: PIN required', () async {
-      expect(await run(false, true, adminSession), AdminAccess.pinRequired);
-      expect(await run(false, true, null), AdminAccess.pinRequired);
-    });
+
+  test('admin role + correct PIN opens', () async {
+    expect(await run(adminSession, (_) async => true), AdminPinResult.ok);
   });
 
-  test('web with PIN configured still requires the PIN', () async {
-    expect(await run(true, true, userSession), AdminAccess.pinRequired);
+  test('admin role + wrong PIN is rejected', () async {
+    expect(await run(adminSession, (_) async => false), AdminPinResult.wrong);
   });
+
+  test('server lockout (P0423) is reported as locked', () async {
+    final r = await run(
+      adminSession,
+      (_) async => throw const PostgrestException(
+          message: 'admin_pin_locked', code: 'P0423'),
+    );
+    expect(r, AdminPinResult.locked);
+  });
+
+  test('server 42501 is reported as notAdmin', () async {
+    final r = await run(
+      adminSession,
+      (_) async =>
+          throw const PostgrestException(message: 'x', code: '42501'),
+    );
+    expect(r, AdminPinResult.notAdmin);
+  });
+
+  test('network or unknown failure is an error, never access', () async {
+    expect(await run(adminSession, (_) async => throw Exception('offline')),
+        AdminPinResult.error);
+    expect(
+        await run(
+            adminSession,
+            (_) async =>
+                throw const PostgrestException(message: 'x', code: '500')),
+        AdminPinResult.error);
+  });
+
+  for (final entry in {
+    'normal user': userSession,
+    'anonymous user': anonSession,
+    'no session': null,
+    'role only in user_metadata/top level': fakeAdmin,
+  }.entries) {
+    test('${entry.key}: denied and the RPC is never called', () async {
+      final calls = <String>[];
+      final r = await run(entry.value, (_) async => true, calls: calls);
+      expect(r, AdminPinResult.notAdmin);
+      expect(calls, isEmpty);
+    });
+  }
 }

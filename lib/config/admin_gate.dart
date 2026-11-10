@@ -1,39 +1,35 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../screens/admin_dashboard_screen.dart';
 import '../services/admin_auth_service.dart';
 
-enum AdminAccess { disabled, pinRequired, allowedWithoutPin }
+enum AdminPinResult { ok, wrong, locked, notAdmin, error }
 
 /// Single entry point for every admin entrance (long press on the login screen
-/// and the Admin button in the profile). The PIN only gates the UI: it is
-/// compiled into the binary via --dart-define, so real protection is the
-/// `app_metadata.role = 'admin'` claim enforced by the database (is_admin()).
+/// and the Admin button in the profile). Access needs the signed
+/// `app_metadata.role = 'admin'` claim AND a PIN verified by the database
+/// (verify_admin_pin). The PIN is never part of any client bundle.
 class AdminGate {
-  static const String _pin = String.fromEnvironment('WORKSPOT_ADMIN_PIN');
-  static const int minPinLength = 8;
-  static const int _maxAttempts = 5;
-  static const Duration _lockDuration = Duration(seconds: 30);
-
-  static int _failedAttempts = 0;
-  static DateTime? _lockedUntil;
-
-  static bool get isConfigured =>
-      _pin.length >= minPinLength && RegExp(r'^\d+$').hasMatch(_pin);
-
-  /// Without a configured PIN only web builds can be opened, and only by a
-  /// user whose token carries the admin claim; mobile stays disabled.
+  /// Admin claim first (the PIN is never requested or sent for other users),
+  /// then the server-side PIN check. [verifyPin] throws [PostgrestException]
+  /// with code P0423 when the server has locked the PIN out.
   @visibleForTesting
-  static Future<AdminAccess> decide({
-    required bool isWeb,
-    required bool pinConfigured,
+  static Future<AdminPinResult> verify({
     required Future<bool> Function() isAdmin,
+    required Future<bool> Function(String pin) verifyPin,
+    required String pin,
   }) async {
-    if (pinConfigured) return AdminAccess.pinRequired;
-    if (isWeb && await isAdmin()) return AdminAccess.allowedWithoutPin;
-    return AdminAccess.disabled;
+    if (!await isAdmin()) return AdminPinResult.notAdmin;
+    try {
+      return await verifyPin(pin) ? AdminPinResult.ok : AdminPinResult.wrong;
+    } on PostgrestException catch (e) {
+      if (e.code == 'P0423') return AdminPinResult.locked;
+      if (e.code == '42501') return AdminPinResult.notAdmin;
+      return AdminPinResult.error;
+    } catch (_) {
+      return AdminPinResult.error;
+    }
   }
 
   static Future<void> open(BuildContext context) async {
@@ -46,50 +42,6 @@ class AdminGate {
         ..showSnackBar(SnackBar(content: Text(message)));
     }
 
-    final access = await decide(
-      isWeb: kIsWeb,
-      pinConfigured: isConfigured,
-      isAdmin: () => AdminAuthService.isAdminUser(
-        Supabase.instance.client,
-        refresh: true,
-      ),
-    );
-    if (access == AdminAccess.disabled) {
-      notify('Admin girişi söndürülüb.');
-      return;
-    }
-    if (access == AdminAccess.allowedWithoutPin) {
-      await navigator.push(
-        MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-      );
-      return;
-    }
-
-    final lockedUntil = _lockedUntil;
-    if (lockedUntil != null && DateTime.now().isBefore(lockedUntil)) {
-      final seconds = lockedUntil.difference(DateTime.now()).inSeconds + 1;
-      notify('Çox sayda səhv cəhd. $seconds saniyə sonra yenidən cəhd edin.');
-      return;
-    }
-
-    if (!context.mounted) return;
-    final entered = await _askPin(context);
-    if (entered == null) return;
-
-    if (entered != _pin) {
-      _failedAttempts++;
-      if (_failedAttempts >= _maxAttempts) {
-        _failedAttempts = 0;
-        _lockedUntil = DateTime.now().add(_lockDuration);
-        notify('Çox sayda səhv cəhd. ${_lockDuration.inSeconds} saniyə sonra yenidən cəhd edin.');
-      } else {
-        notify('PIN yanlışdır.');
-      }
-      return;
-    }
-    _failedAttempts = 0;
-    _lockedUntil = null;
-
     final client = Supabase.instance.client;
     if (client.auth.currentSession == null) {
       notify('Əvvəl telefonla daxil olun.');
@@ -100,9 +52,33 @@ class AdminGate {
       return;
     }
 
-    await navigator.push(
-      MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+    if (!context.mounted) return;
+    final entered = await _askPin(context);
+    if (entered == null || entered.isEmpty) return;
+
+    final result = await verify(
+      isAdmin: () => AdminAuthService.isAdminUser(client),
+      verifyPin: (pin) async {
+        final ok = await client.rpc('verify_admin_pin', params: {'p_pin': pin});
+        return ok == true;
+      },
+      pin: entered,
     );
+
+    switch (result) {
+      case AdminPinResult.ok:
+        await navigator.push(
+          MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+        );
+      case AdminPinResult.wrong:
+        notify('PIN yanlışdır.');
+      case AdminPinResult.locked:
+        notify('Çox sayda səhv cəhd. 15 dəqiqə sonra yenidən cəhd edin.');
+      case AdminPinResult.notAdmin:
+        notify('Bu hesabın admin icazəsi yoxdur. Admin hesabı ilə daxil olun.');
+      case AdminPinResult.error:
+        notify('PIN yoxlanıla bilmədi. Bir az sonra yenidən cəhd edin.');
+    }
   }
 
   static Future<String?> _askPin(BuildContext context) {
