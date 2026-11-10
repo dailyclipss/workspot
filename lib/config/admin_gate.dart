@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../screens/admin_dashboard_screen.dart';
 import '../services/admin_auth_service.dart';
+
+enum AdminAccess { disabled, pinRequired, allowedWithoutPin }
 
 /// Single entry point for every admin entrance (long press on the login screen
 /// and the Admin button in the profile). The PIN only gates the UI: it is
@@ -20,6 +23,19 @@ class AdminGate {
   static bool get isConfigured =>
       _pin.length >= minPinLength && RegExp(r'^\d+$').hasMatch(_pin);
 
+  /// Without a configured PIN only web builds can be opened, and only by a
+  /// user whose token carries the admin claim; mobile stays disabled.
+  @visibleForTesting
+  static Future<AdminAccess> decide({
+    required bool isWeb,
+    required bool pinConfigured,
+    required Future<bool> Function() isAdmin,
+  }) async {
+    if (pinConfigured) return AdminAccess.pinRequired;
+    if (isWeb && await isAdmin()) return AdminAccess.allowedWithoutPin;
+    return AdminAccess.disabled;
+  }
+
   static Future<void> open(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
@@ -30,8 +46,22 @@ class AdminGate {
         ..showSnackBar(SnackBar(content: Text(message)));
     }
 
-    if (!isConfigured) {
+    final access = await decide(
+      isWeb: kIsWeb,
+      pinConfigured: isConfigured,
+      isAdmin: () => AdminAuthService.isAdminUser(
+        Supabase.instance.client,
+        refresh: true,
+      ),
+    );
+    if (access == AdminAccess.disabled) {
       notify('Admin girişi söndürülüb.');
+      return;
+    }
+    if (access == AdminAccess.allowedWithoutPin) {
+      await navigator.push(
+        MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+      );
       return;
     }
 
@@ -42,6 +72,7 @@ class AdminGate {
       return;
     }
 
+    if (!context.mounted) return;
     final entered = await _askPin(context);
     if (entered == null) return;
 
