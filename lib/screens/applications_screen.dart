@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/app_language.dart';
+import '../utils/salary_utils.dart';
+
 class ApplicationsScreen extends StatefulWidget {
   const ApplicationsScreen({super.key});
 
@@ -105,7 +108,7 @@ class _ApplicationsScreenState extends State<ApplicationsScreen> {
                                 children: [
                                   Text(job['title'] ?? 'Vakansiya', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                                   const SizedBox(height: 2),
-                                  Text('${job['company_name'] ?? 'Məkan'} • ${job['salary_amount'] ?? 0} AZN', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                                  Text('${job['company_name'] ?? 'Məkan'} • ${formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'))}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                                 ],
                               ),
                             ),

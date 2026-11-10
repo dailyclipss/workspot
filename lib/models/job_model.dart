@@ -1,8 +1,13 @@
+import '../services/reference_data_service.dart';
+import '../utils/salary_utils.dart';
+
 class JobModel {
   final String id;
   final String businessName;
   final String category;
   final String district;
+  final int? categoryId;
+  final int? districtId;
   final String instagram;
   final String phoneWhatsapp;
   final String contactPerson;
@@ -24,6 +29,8 @@ class JobModel {
     String? businessName,
     String? category,
     String? district,
+    this.categoryId,
+    this.districtId,
     String? instagram,
     String? phoneWhatsapp,
     String? contactPerson,
@@ -46,7 +53,7 @@ class JobModel {
     double? lat,
     double? lng,
   })  : businessName = businessName ?? companyName ?? title ?? 'Məkan / Şirkət',
-        category = category ?? 'General',
+        category = category ?? '',
         district = district ?? '',
         instagram = instagram ?? '',
         phoneWhatsapp = phoneWhatsapp ?? '',
@@ -67,10 +74,8 @@ class JobModel {
   String get title => businessName;
   String get companyName => businessName;
   String get employmentType => schedule;
-  double get salaryAmount =>
-      double.tryParse(
-          salary.replaceAll(RegExp(r'[^0-9.,]'), '').replaceAll(',', '.')) ??
-      0.0;
+  double get salaryAmount => (parseSalaryText(salary).lower ?? 0).toDouble();
+  SalaryRange get salaryRange => parseSalaryText(salary);
   double get lat => latitude;
   double get lng => longitude;
   bool get isVerified => adStatus == 'active' && hasVacancy;
@@ -128,15 +133,16 @@ class JobModel {
           json,
           ['business_name', 'company_name', 'company', 'title'],
           'Məkan / Şirkət'),
-      category: _stringValue(json, ['category'], 'General'),
+      category: _stringValue(json, ['category'], ''),
+      categoryId: ReferenceDataService.asId(json['category_id']),
+      districtId: ReferenceDataService.asId(json['district_id']),
       district: _stringValue(json, ['district'], ''),
       instagram: _stringValue(json, ['instagram'], ''),
       phoneWhatsapp:
           _stringValue(json, ['phone_whatsapp', 'phone', 'whatsapp'], ''),
       contactPerson: _stringValue(json, ['contact_person'], ''),
       hasVacancy: _boolValue(json, ['has_vacancy', 'is_vacancy'], true),
-      salary: _stringValue(
-          json, ['salary'], _stringValue(json, ['salary_amount'], '0')),
+      salary: formatSalaryText(parseSalary(json)) ?? '0',
       schedule: _stringValue(
           json, ['schedule', 'employment_type', 'job_type'], 'Tam iş günü'),
       address: _stringValue(json, ['address'], ''),

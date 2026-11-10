@@ -15,6 +15,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart'
 import 'package:url_launcher/url_launcher.dart';
 import '../core/services/application_service.dart';
 import '../services/app_language.dart';
+import '../models/category.dart';
+import '../services/reference_data_service.dart';
+import '../utils/category_icons.dart';
+import '../widgets/reference_pickers.dart';
 import '../services/location_service.dart';
 import '../services/job_location_resolver.dart';
 import '../services/job_moderation_service.dart';
@@ -24,14 +28,9 @@ import 'auth_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import '../utils/contact_utils.dart';
+import '../utils/salary_utils.dart';
 import '../utils/vip_utils.dart';
 import '../widgets/language_theme_controls.dart';
-
-class _CategoryMeta {
-  final Color color;
-  final IconData icon;
-  const _CategoryMeta(this.color, this.icon);
-}
 
 class _JobClusterItem with cm.ClusterItem {
   final Map<String, dynamic> job;
@@ -43,36 +42,11 @@ class _JobClusterItem with cm.ClusterItem {
   LatLng get location => point;
 }
 
-IconData _getCategoryIcon(String? category) {
-  switch (category) {
-    case 'Restoran & Kafeler':
-      return Icons.restaurant;
-    case 'İT & Proqramlaşdırma':
-      return Icons.code;
-    case 'Satış & Marketinq':
-      return Icons.shopping_bag;
-    case 'Logistika & Çatdırılma':
-      return Icons.local_shipping;
-    case 'Müştəri Xidmətləri':
-      return Icons.headset_mic;
-    case 'Tikinti & Təmir':
-      return Icons.construction;
-    case 'Təhsil & Tədris':
-      return Icons.school;
-    case 'Səhiyyə & Tibb':
-      return Icons.medical_services;
-    case 'Gözəllik & Salonda İş':
-      return Icons.content_cut;
-    default:
-      return Icons.work;
-  }
-}
-
 Widget _buildMarkerWidget(Map<String, dynamic> job) {
   // Safe bool parse for VIP/Verified status
   final isVip = isJobVipActive(job) || job['is_verified'] == true;
 
-  final salary = job['salary'] ?? '0';
+  final salary = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
 
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -90,11 +64,11 @@ Widget _buildMarkerWidget(Map<String, dynamic> job) {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Icon(_getCategoryIcon(job['category']),
+        Icon(iconForCategory(ReferenceDataService.instance.categoryOfJob(job)),
             size: 12, color: const Color(0xFF94A3B8)),
         const SizedBox(width: 4),
         Text(
-          '$salary ₼',
+          salary,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 11,
@@ -140,7 +114,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   bool _isJobsLoading = false;
   MapType _currentMapType = MapType.normal;
   bool _isFilterOpen = false;
-  String _selectedCategory = 'all';
+  JobCategory? _selectedCategory;
   String _selectedJobType = 'all';
   double _radiusKm = 30.0;
   static const double _salaryMin = 0;
@@ -162,18 +136,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   bool _pendingCameraFitToMarkers = false;
   bool _pendingClusterSync = false;
 
-  final List<String> _categories = const [
-    'all',
-    'cat_catering',
-    'cat_it',
-    'cat_sales',
-    'cat_logistics',
-    'cat_customer_service',
-    'cat_construction',
-    'cat_education',
-    'cat_medicine',
-    'cat_beauty',
-  ];
+  final ReferenceDataService _ref = ReferenceDataService.instance;
 
   List<Map<String, dynamic>> _allJobs = [];
   Set<String> _blockedEmployerIds = {};
@@ -189,6 +152,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       extraPercent: 0.20,
     );
     appLang.addListener(_onLanguageChanged);
+    _ref.addListener(_onLanguageChanged);
+    _ref.load();
     // Rebuild the sign-in/profile entry whenever the auth state changes.
     _authStateSubscription =
         supabase.Supabase.instance.client.auth.onAuthStateChange.listen((_) {
@@ -239,6 +204,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   @override
   void dispose() {
     appLang.removeListener(_onLanguageChanged);
+    _ref.removeListener(_onLanguageChanged);
     _bannerAd?.dispose();
     _jobsSubscription?.cancel();
     _authStateSubscription?.cancel();
@@ -409,7 +375,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       if (point != null) {
         final isVip = _jobIsVipActive(job);
         final jobId = job['id']?.toString() ?? UniqueKey().toString();
-        final salaryLabel = _formatMarkerSalary(job['salary']);
+        final salaryLabel = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
         final categoryIcon = _markerCategoryIcon(job);
         final markerKey =
             '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}';
@@ -602,29 +568,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return double.tryParse(text);
   }
 
-  double _jobSalary(Map<String, dynamic> job) {
-    final value = job['salary'] ?? job['salary_amount'];
-    final directValue = _safeParseDouble(value);
-    if (directValue != null) return directValue;
-
-    final text = value?.toString().trim() ?? '';
-    final match = RegExp(r'(\d+(?:[\.,]\d+)?)').firstMatch(text);
-    if (match != null) {
-      final parsed = double.tryParse(match.group(1)!.replaceAll(',', '.'));
-      if (parsed != null) return parsed;
-    }
-
-    return 0.0;
-  }
-
   String _jobSalaryString(Map<String, dynamic> job) {
-    final value = job['salary'] ?? job['salary_text'] ?? job['salary_amount'];
-    final text = value?.toString().trim() ?? '';
-    if (text.isEmpty) {
-      final salary = _jobSalary(job);
-      return salary <= 0 ? 'Razılaşma ilə' : '${salary.round()} ₼';
-    }
-    return text.contains('₼') ? text : '$text ₼';
+    return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
   }
 
   String _jobBusinessName(Map<String, dynamic> job) {
@@ -632,9 +577,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         _jobText(job, 'company_name', _jobText(job, 'title', 'Şirkət')));
   }
 
-  String _jobDistrict(Map<String, dynamic> job) {
-    return _jobText(job, 'district', '');
-  }
+  String _jobDistrict(Map<String, dynamic> job) => _ref.districtLabel(job);
 
   String _jobSchedule(Map<String, dynamic> job) {
     return _jobText(
@@ -707,8 +650,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   String _jobSalaryLabel(Map<String, dynamic> job) {
-    final salary = _jobSalary(job);
-    return salary <= 0 ? 'Razılaşma ilə' : '${salary.round()} ₼';
+    return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
   }
 
   List<Map<String, dynamic>> get _jobs => _filteredJobs;
@@ -928,7 +870,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final job = item.job;
     final jobId = job['id']?.toString() ?? cluster.getId();
     final isVip = _jobIsVipActive(job);
-    final salaryLabel = _formatMarkerSalary(job['salary']);
+    final salaryLabel = formatSalaryCompact(parseSalary(job), empty: appLang.translate('salary_negotiable'));
     final categoryIcon = _markerCategoryIcon(job);
     final icon = _singleMarkerIcons[
             '$salaryLabel|$isVip|${categoryIcon.codePoint}|${categoryIcon.fontFamily}|${categoryIcon.fontPackage}'] ??=
@@ -1016,31 +958,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return byteData!.buffer.asUint8List();
   }
 
-  IconData _getCategoryIcon(String? category) {
-    switch (category) {
-      case 'Restoran & Kafeler':
-        return Icons.restaurant;
-      case 'İT & Proqramlaşdırma':
-        return Icons.code;
-      case 'Satış & Marketinq':
-        return Icons.shopping_bag;
-      case 'Logistika & Çatdırılma':
-        return Icons.local_shipping;
-      case 'Müştəri Xidmətləri':
-        return Icons.headset_mic;
-      case 'Tikinti & Təmir':
-        return Icons.construction;
-      case 'Təhsil & Tədris':
-        return Icons.school;
-      case 'Səhiyyə & Tibb':
-        return Icons.medical_services;
-      case 'Gözəllik & Salonda İş':
-        return Icons.content_cut;
-      default:
-        return Icons.work;
-    }
-  }
-
   LatLng? _jobPoint(Map<String, dynamic> job) {
     final point = job['point'];
     if (point is LatLng) return point;
@@ -1058,93 +975,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         : Icons.work_outline_rounded;
   }
 
-  String _formatMarkerSalary(dynamic salaryValue) {
-    final raw = salaryValue?.toString().trim() ?? '';
-    if (raw.isEmpty) return '0 ₼';
-
-    final cleaned = raw
-        .replaceAll(RegExp(r'\b(AZN|MANAT)\b', caseSensitive: false), '')
-        .replaceAll('₼', '')
-        .trim()
-        .replaceAll(RegExp(r'\s+'), ' ');
-
-    return cleaned.isEmpty ? '0 ₼' : '$cleaned ₼';
-  }
-
-  IconData _markerCategoryIcon(Map<String, dynamic> job) {
-    final raw = [
-      job['category'],
-      job['category_id'],
-      job['categoryId'],
-      job['category_name'],
-    ]
-        .where((value) => value != null)
-        .map((value) => value.toString().toLowerCase())
-        .join(' ');
-
-    bool hasAny(List<String> needles) => needles.any(raw.contains);
-
-    if (hasAny(['courier', 'delivery', 'çatdır', 'logistics', 'logistika'])) {
-      return Icons.two_wheeler;
-    }
-    if (hasAny(['cafe', 'barista', 'kafe', 'coffee'])) {
-      return Icons.local_cafe;
-    }
-    if (hasAny(['restaurant', 'waiter', 'restoran', 'garson'])) {
-      return Icons.restaurant;
-    }
-    if (hasAny(['retail', 'clothes', 'fashion', 'satış', 'shop', 'store'])) {
-      return Icons.checkroom;
-    }
-    if (hasAny(
-        ['office', 'admin', 'ofis', 'inzibati', 'assistant', 'clerical'])) {
-      return Icons.business_center;
-    }
-    if (hasAny(['tech', 'it', 'software', 'program', 'proqram', 'developer'])) {
-      return Icons.laptop;
-    }
-
-    return Icons.work_outline;
-  }
-
-  _CategoryMeta _categoryMeta(String? rawCategory) {
-    final normalized = (rawCategory ?? '').toLowerCase();
-    bool has(String needle) => normalized.contains(needle);
-
-    if (has('it') || has('proqram') || has('software')) {
-      return const _CategoryMeta(Color(0xFF00E676), Icons.code_rounded);
-    }
-    if (has('restoran') || has('kafe') || has('catering')) {
-      return const _CategoryMeta(Color(0xFFFF6D00), Icons.restaurant_rounded);
-    }
-    if (has('sat') || has('marketinq') || has('marketing')) {
-      return const _CategoryMeta(Color(0xFF2979FF), Icons.storefront_rounded);
-    }
-    if (has('səhiyyə') || has('tibb') || has('medicine') || has('health')) {
-      return const _CategoryMeta(
-          Color(0xFF00E5FF), Icons.medical_services_rounded);
-    }
-    if (has('logistika') ||
-        has('anbar') ||
-        has('çatdırılma') ||
-        has('logistics')) {
-      return const _CategoryMeta(
-          Color(0xFFD500F9), Icons.local_shipping_rounded);
-    }
-    if (has('müştəri') || has('customer') || has('zəng') || has('xidmət')) {
-      return const _CategoryMeta(Color(0xFF2979FF), Icons.headset_mic_rounded);
-    }
-    if (has('tikinti') || has('construction') || has('inşaat')) {
-      return const _CategoryMeta(Color(0xFFFFAB00), Icons.construction_rounded);
-    }
-    if (has('təhsil') || has('education')) {
-      return const _CategoryMeta(Color(0xFFD500F9), Icons.school_rounded);
-    }
-    if (has('gözəllik') || has('beauty') || has('salon') || has('idman')) {
-      return const _CategoryMeta(Color(0xFFFF5252), Icons.content_cut_rounded);
-    }
-    return const _CategoryMeta(Color(0xFF2979FF), Icons.work_rounded);
-  }
+  IconData _markerCategoryIcon(Map<String, dynamic> job) =>
+      iconForCategory(_ref.categoryOfJob(job));
 
   List<Map<String, dynamic>> get _filteredJobs =>
       _buildFilteredJobsWithDiagnostics();
@@ -1177,7 +1009,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final company = _jobText(job, 'company_name', 'Şirkət').toLowerCase();
       final category = _jobCategory(job).toLowerCase();
       final district = _jobText(job, 'district', '').toLowerCase();
-      final salary = _jobSalary(job);
       final distance = _calculateDistance(_mapCenter, point);
 
       if (!_categoryMatches(job)) {
@@ -1206,8 +1037,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       }
 
       final aboveMax =
-          _salaryRange.end < _salaryMax && salary > _salaryRange.end;
-      if (salary < _salaryRange.start || aboveMax) {
+          _salaryRange.end < _salaryMax ? _salaryRange.end : null;
+      if (!salaryOverlaps(parseSalary(job),
+          filterMin: _salaryRange.start, filterMax: aboveMax)) {
         salaryRejected++;
         continue;
       }
@@ -1232,72 +1064,12 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return filteredJobs;
   }
 
-  String _jobCategory(Map<String, dynamic> job) {
-    return _jobText(
-        job,
-        'category',
-        _jobText(job, 'category_name',
-            _jobText(job, 'category_id', _jobText(job, 'categoryId', ''))));
-  }
+  String _jobCategory(Map<String, dynamic> job) => _ref.categoryLabel(job);
 
   bool _categoryMatches(Map<String, dynamic> job) {
-    if (_selectedCategory == 'all') return true;
-
-    final value = _jobCategory(job).toLowerCase();
-    final normalizedValue = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-    switch (_selectedCategory) {
-      case 'cat_catering':
-        return normalizedValue.contains('restoran') ||
-            normalizedValue.contains('kafe') ||
-            normalizedValue.contains('catering') ||
-            normalizedValue.contains('restaurant');
-      case 'cat_it':
-        return normalizedValue.contains('it') ||
-            normalizedValue.contains('proqram') ||
-            normalizedValue.contains('software') ||
-            normalizedValue.contains('developer') ||
-            normalizedValue.contains('code');
-      case 'cat_sales':
-        return normalizedValue.contains('satış') ||
-            normalizedValue.contains('sales') ||
-            normalizedValue.contains('marketinq') ||
-            normalizedValue.contains('marketing');
-      case 'cat_logistics':
-        return normalizedValue.contains('logistika') ||
-            normalizedValue.contains('delivery') ||
-            normalizedValue.contains('çatdır') ||
-            normalizedValue.contains('shipping');
-      case 'cat_customer_service':
-        return normalizedValue.contains('müştəri') ||
-            normalizedValue.contains('xidmət') ||
-            normalizedValue.contains('customer') ||
-            normalizedValue.contains('service') ||
-            normalizedValue.contains('support');
-      case 'cat_construction':
-        return normalizedValue.contains('tikinti') ||
-            normalizedValue.contains('construction') ||
-            normalizedValue.contains('təmir') ||
-            normalizedValue.contains('repair');
-      case 'cat_education':
-        return normalizedValue.contains('təhsil') ||
-            normalizedValue.contains('education') ||
-            normalizedValue.contains('school') ||
-            normalizedValue.contains('training');
-      case 'cat_medicine':
-        return normalizedValue.contains('səhiyyə') ||
-            normalizedValue.contains('tibb') ||
-            normalizedValue.contains('medicine') ||
-            normalizedValue.contains('health') ||
-            normalizedValue.contains('medical');
-      case 'cat_beauty':
-        return normalizedValue.contains('gözəllik') ||
-            normalizedValue.contains('beauty') ||
-            normalizedValue.contains('spa') ||
-            normalizedValue.contains('salon');
-      default:
-        return true;
-    }
+    final selected = _selectedCategory;
+    if (selected == null) return true;
+    return _ref.categoryMatches(job, selected);
   }
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
@@ -2055,36 +1827,49 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   Widget _buildCategoryList(bool isDark) {
+    final selected = _selectedCategory;
+    final label = selected == null
+        ? appLang.translate('ref_category_button')
+        : selected.localizedName(appLang.currentLanguage);
     return SizedBox(
       height: 42,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final category = _categories[index];
-          final isSelected = _selectedCategory == category;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              selected: isSelected,
-              showCheckmark: false,
-              label: Text(appLang.translate(category)),
-              labelStyle: TextStyle(
-                color: isSelected
-                    ? Colors.white
-                    : (isDark ? Colors.grey[300] : const Color(0xFF0F172A)),
-                fontSize: 12,
-              ),
-              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-              selectedColor: const Color(0xFF2563EB),
-              onSelected: (_) async {
-                setState(() => _selectedCategory = category);
-                await _refreshVisibleJobMarkers();
-              },
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ActionChip(
+            avatar: Icon(
+              selected == null ? Icons.category_rounded : iconForCategory(selected),
+              size: 16,
+              color: selected == null
+                  ? (isDark ? Colors.grey[300] : const Color(0xFF0F172A))
+                  : Colors.white,
             ),
-          );
-        },
+            label: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(label, overflow: TextOverflow.ellipsis),
+            ),
+            labelStyle: TextStyle(
+              color: selected == null
+                  ? (isDark ? Colors.grey[300] : const Color(0xFF0F172A))
+                  : Colors.white,
+              fontSize: 12,
+            ),
+            backgroundColor: selected == null
+                ? (isDark ? const Color(0xFF1E293B) : Colors.white)
+                : const Color(0xFF2563EB),
+            onPressed: () async {
+              final result = await showCategoryPicker(
+                context,
+                selectedId: selected?.id,
+                allowAll: true,
+              );
+              if (result == null || !mounted) return;
+              setState(() => _selectedCategory = result.value);
+              await _refreshVisibleJobMarkers();
+            },
+          ),
+        ),
       ),
     );
   }
@@ -2123,7 +1908,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       _selectedJobType = 'all';
       _salaryRange = const RangeValues(_salaryMin, _salaryMax);
       _showOnlyVerified = false;
-      _selectedCategory = 'all';
+      _selectedCategory = null;
       _searchController.clear();
     });
     unawaited(_refreshVisibleJobMarkers());
@@ -2356,7 +2141,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _jobText(job, 'category', 'General'),
+                      _jobCategory(job),
                       style: const TextStyle(
                         fontSize: 13,
                         color: Color(0xFF60A5FA),
@@ -2616,7 +2401,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                               subtitle: Text(
                                   '${_jobText(job, 'company_name', 'Şirkət')} • ${_jobText(job, 'address', 'Bakı')}',
                                   style: const TextStyle(fontSize: 12)),
-                              trailing: Text('${job['salary']} ₼',
+                              trailing: Text(_jobSalaryLabel(job),
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF2563EB))),

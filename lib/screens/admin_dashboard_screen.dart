@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -6,11 +7,16 @@ import '../admin/admin_approval_screen.dart';
 import '../core/services/location_service.dart';
 import '../services/admin_auth_service.dart';
 import '../services/app_language.dart';
+import '../models/category.dart';
+import '../models/district.dart';
+import '../services/reference_data_service.dart';
+import '../widgets/reference_pickers.dart';
 import '../services/geocoding_service.dart';
 import '../services/notification_service.dart';
 import '../services/presence_service.dart';
 import '../widgets/online_users_badge.dart';
 import '../services/job_location_resolver.dart';
+import '../utils/salary_utils.dart';
 import '../utils/vip_utils.dart';
 import 'auth_screen.dart';
 import 'home_map_screen.dart';
@@ -50,6 +56,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    ReferenceDataService.instance.load();
     _bootstrap();
   }
   Future<void> _bootstrap() async {
@@ -191,27 +198,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return _jobText(job, 'business_name', _jobText(job, 'company_name', _jobText(job, 'title', 'Şirkət')));
   }
 
-  String _jobCategory(Map<String, dynamic> job) => _jobText(job, 'category', '—');
+  String _jobCategory(Map<String, dynamic> job) =>
+      ReferenceDataService.instance.categoryLabel(job, fallback: '—');
 
-  String _jobDistrict(Map<String, dynamic> job) => _jobText(job, 'district', '—');
-
-  num? _jobSalaryValue(Map<String, dynamic> job) {
-    for (final key in const ['salary_amount', 'salary']) {
-      final raw = job[key];
-      if (raw == null) continue;
-      if (raw is num) return raw;
-      final parsed = double.tryParse(
-        raw.toString().replaceAll(RegExp(r'[^0-9,\.]'), '').replaceAll(',', '.'),
-      );
-      if (parsed != null) return parsed;
-    }
-    return null;
-  }
+  String _jobDistrict(Map<String, dynamic> job) =>
+      ReferenceDataService.instance.districtLabel(job, fallback: '—');
 
   String _jobSalaryLabel(Map<String, dynamic> job) {
-    final value = _jobSalaryValue(job);
-    if (value == null || value <= 0) return 'Razılaşma ilə';
-    return '${value == value.roundToDouble() ? value.toInt() : value} ₼';
+    return formatSalaryDisplay(parseSalary(job), empty: appLang.translate('salary_negotiable'));
   }
 
   String _jobAdStatus(Map<String, dynamic> job) {
@@ -504,18 +498,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _openEditJobSheet(Map<String, dynamic> job) async {
     final jobId = job['id'].toString();
     final businessController = TextEditingController(text: _jobBusinessName(job));
-    final categoryController = TextEditingController(text: _jobCategory(job));
-    final districtController = TextEditingController(text: _jobDistrict(job));
+    final refData = ReferenceDataService.instance;
+    JobCategory? selectedCategory = refData.categoryOfJob(job);
+    District? selectedDistrict = refData.districtOfJob(job);
+    final originalCategoryText = _jobText(job, 'category', '');
+    final originalDistrictText = _jobText(job, 'district', '');
     final addressController = TextEditingController(text: _jobText(job, 'address', ''));
     final descriptionController = TextEditingController(text: _jobText(job, 'description', ''));
     final phoneController = TextEditingController(text: _jobText(job, 'phone_whatsapp', ''));
     final instagramController = TextEditingController(text: _jobText(job, 'instagram', ''));
     final contactController = TextEditingController(text: _jobText(job, 'contact_person', ''));
-    final existingSalary = _jobSalaryValue(job);
-    final salaryController = TextEditingController(
-      text: existingSalary == null || existingSalary <= 0
-          ? ''
-          : '${existingSalary == existingSalary.roundToDouble() ? existingSalary.toInt() : existingSalary}',
+    final existingSalary = parseSalary(job);
+    final salaryMinController = TextEditingController(
+      text: existingSalary.min?.toString() ?? '',
+    );
+    final salaryMaxController = TextEditingController(
+      text: existingSalary.max?.toString() ?? '',
     );
     final formKey = GlobalKey<FormState>();
     final resolvedLocation = JobLocationResolver.ensureCoordinates(job);
@@ -560,10 +558,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     }
                     setSheetState(() {
                       addressController.text = result.displayName;
-                      final district = result.district?.trim();
-                      if (district != null && district.isNotEmpty) {
-                        districtController.text = district;
-                      }
+                      final district = refData.matchDistrict(result.district);
+                      if (district != null) selectedDistrict = district;
                     });
                   }
 
@@ -625,21 +621,61 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(height: 16),
                           _sheetField(businessController, 'Biznes adı'),
                           const SizedBox(height: 12),
-                          _sheetField(categoryController, 'Kateqoriya'),
-                          const SizedBox(height: 12),
-                          _sheetField(districtController, 'Rayon'),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: salaryController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            style: const TextStyle(color: Colors.white),
-                            decoration: _sheetDecoration('Maaş (AZN) — boş = Razılaşma ilə'),
-                            validator: (value) {
-                              final text = value?.trim() ?? '';
-                              if (text.isEmpty) return null;
-                              final parsed = double.tryParse(text.replaceAll(',', '.'));
-                              return parsed == null || parsed < 0 ? 'Düzgün maaş daxil edin' : null;
+                          _sheetPicker(
+                            'Kateqoriya',
+                            selectedCategory?.nameAz ?? originalCategoryText,
+                            () async {
+                              final r = await showCategoryPicker(sheetContext,
+                                  selectedId: selectedCategory?.id);
+                              if (r?.value != null) {
+                                setSheetState(() => selectedCategory = r!.value);
+                              }
                             },
+                          ),
+                          const SizedBox(height: 12),
+                          _sheetPicker(
+                            'Rayon',
+                            selectedDistrict?.nameAz ?? originalDistrictText,
+                            () async {
+                              final d = await showDistrictPicker(sheetContext,
+                                  selectedId: selectedDistrict?.id);
+                              if (d != null) {
+                                setSheetState(() => selectedDistrict = d);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: salaryMinController,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  maxLength: 6,
+                                  style: const TextStyle(color: Colors.white),
+                                  decoration: _sheetDecoration('Minimum maaş (AZN)').copyWith(counterText: ''),
+                                  validator: (_) => validateSalaryInputs(
+                                    salaryMinController.text,
+                                    salaryMaxController.text,
+                                    invalidMessage: 'Düzgün maaş daxil edin',
+                                    orderMessage: 'Minimum maaş maksimum maaşdan böyük ola bilməz',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: salaryMaxController,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  maxLength: 6,
+                                  style: const TextStyle(color: Colors.white),
+                                  decoration: _sheetDecoration('Maksimum maaş (AZN)').copyWith(counterText: ''),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
                           _sheetField(addressController, 'Ünvan'),
@@ -767,18 +803,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   : () async {
                                       final navigator = Navigator.of(sheetContext);
                                       if (!formKey.currentState!.validate()) return;
-                                      final salaryText = salaryController.text.trim().replaceAll(',', '.');
-                                      final salaryParsed = salaryText.isEmpty ? 0.0 : double.parse(salaryText);
-                                      final salaryNum = salaryParsed == salaryParsed.roundToDouble()
-                                          ? salaryParsed.toInt()
-                                          : salaryParsed;
+                                      final salaryValues = salaryPayload(salaryFromInputs(
+                                          salaryMinController.text, salaryMaxController.text),
+                                          clearNegotiable: job['salary_type'] == negotiableSalaryType);
                                       await _updateJob(jobId, {
-                                        'salary_amount': salaryNum,
-                                        'salary': salaryNum.toString(),
+                                        ...salaryValues,
                                         'business_name': businessController.text.trim(),
                                         'company_name': businessController.text.trim(),
-                                        'category': categoryController.text.trim(),
-                                        'district': districtController.text.trim(),
+                                        if (selectedCategory != null) ...{
+                                          'category_id': selectedCategory!.id,
+                                          'category': selectedCategory!.nameAz,
+                                        },
+                                        if (selectedDistrict != null) ...{
+                                          'district_id': selectedDistrict!.id,
+                                          'district': selectedDistrict!.nameAz,
+                                        },
                                         'address': addressController.text.trim(),
                                         'latitude': selectedLocation.latitude,
                                         'longitude': selectedLocation.longitude,
@@ -810,8 +849,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
 
     businessController.dispose();
-    categoryController.dispose();
-    districtController.dispose();
     addressController.dispose();
     descriptionController.dispose();
     phoneController.dispose();
@@ -833,6 +870,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: _accent, width: 1.2),
+      ),
+    );
+  }
+
+  Widget _sheetPicker(String label, String value, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: _sheetDecoration(label),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                value.isEmpty ? '—' : value,
+                style: const TextStyle(color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, color: _muted),
+          ],
+        ),
       ),
     );
   }
