@@ -6,6 +6,7 @@ import {
   hashOtp,
   jsonResponse,
   PHONE_PATTERN,
+  unsupportedOtpVersionResponse,
 } from '../_shared/otp.ts';
 
 const OTP_LIFETIME_MS = 2 * 60 * 1000;
@@ -130,18 +131,12 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: 'Invalid request body.' }, 400);
   }
 
-  const { phone, otpCode, v } = body ?? {};
+  const { phone, v } = body ?? {};
+  const versionError = unsupportedOtpVersionResponse(v);
+  if (versionError) return versionError;
+
   if (typeof phone !== 'string' || !PHONE_PATTERN.test(phone)) {
     return jsonResponse({ error: 'Invalid phone number.' }, 400);
-  }
-
-  // LEGACY: app 1.0.0 (30) generates and verifies the code on the client.
-  // Remove this branch once 1.0.1+ is live and users have updated.
-  if (v !== 2) {
-    if (typeof otpCode !== 'string' || !/^\d{6}$/.test(otpCode)) {
-      return jsonResponse({ error: 'Invalid phone number or OTP code.' }, 400);
-    }
-    return await sendWhatsApp(phone, otpCode);
   }
 
   const reviewPhone = Deno.env.get('REVIEW_PHONE');
