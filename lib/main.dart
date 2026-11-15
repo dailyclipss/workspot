@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/ads_initialization_service.dart';
 import 'services/theme_service.dart';
 import 'services/app_language.dart';
 import 'services/presence_service.dart';
@@ -18,15 +20,6 @@ void main() async {
   }
 
   Object? startupError;
-  if (!kIsWeb) {
-    try {
-      await MobileAds.instance.initialize();
-    } catch (error, stackTrace) {
-      // Ads are non-critical: log and continue without them.
-      debugPrint('MobileAds initialization failed: $error');
-      debugPrintStack(stackTrace: stackTrace);
-    }
-  }
   try {
     await Supabase.initialize(
       url: 'https://erlguuogmrgyhuhbecny.supabase.co',
@@ -48,6 +41,11 @@ void main() async {
     return;
   }
   runApp(const MyApp());
+  if (!kIsWeb) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(AdsInitializationService.initialize());
+    });
+  }
   try {
     PresenceService.instance.start();
   } catch (error) {

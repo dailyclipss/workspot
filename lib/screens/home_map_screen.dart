@@ -15,6 +15,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart'
 import 'package:url_launcher/url_launcher.dart';
 import '../core/services/application_service.dart';
 import '../services/app_language.dart';
+import '../services/ads_initialization_service.dart';
 import '../models/category.dart';
 import '../services/reference_data_service.dart';
 import '../utils/category_icons.dart';
@@ -109,7 +110,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   LatLng _mapCenter = _bakuYouthHubCenter;
   LatLng? _currentUserLocation;
   double _currentZoom = 12.8;
-  bool _isMapLoading = true;
+  bool _isMapLoading = false;
   String? _mapDebugMessage;
   bool _isJobsLoading = false;
   MapType _currentMapType = MapType.normal;
@@ -135,6 +136,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   OverlayEntry? _jobDetailOverlayEntry;
   bool _pendingCameraFitToMarkers = false;
   bool _pendingClusterSync = false;
+  bool _pendingLocationCameraMove = false;
 
   final ReferenceDataService _ref = ReferenceDataService.instance;
 
@@ -160,9 +162,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       if (mounted) setState(() {});
     });
     if (!kIsWeb) {
-      _loadBannerAd();
+      unawaited(_loadBannerAd());
     }
-    _loadUserLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_loadUserLocation());
+    });
     _initializeJobs();
     _jobsRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
@@ -213,7 +217,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     super.dispose();
   }
 
-  void _loadBannerAd() {
+  Future<void> _loadBannerAd() async {
+    if (!await AdsInitializationService.initialize() || !mounted) return;
+
     final bannerAd = BannerAd(
       adUnitId: _bannerAdUnitId,
       request: const AdRequest(),
@@ -506,15 +512,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   Future<void> _loadUserLocation() async {
     try {
       final position = await LocationService.GetCurrentLocation();
-      if (position != null) {
-        _currentUserLocation = LatLng(position.latitude, position.longitude);
-        _mapCenter = _currentUserLocation!;
+      if (!mounted || position == null) return;
+      final location = LatLng(position.latitude, position.longitude);
+      _currentUserLocation = location;
+      _mapCenter = location;
+      if (_isMapReady && _mapController != null) {
+        await _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(location, 14.5),
+        );
+      } else {
+        _pendingLocationCameraMove = true;
       }
-    } catch (_) {
-    } finally {
-      if (mounted) {
-        setState(() => _isMapLoading = false);
-      }
+    } on TimeoutException {
+      debugPrint('Initial location lookup timed out');
+    } catch (error) {
+      debugPrint('Initial location lookup failed: $error');
     }
   }
 
@@ -527,7 +539,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   Future<void> _recenterMyLocation() async {
-    final target = _currentUserLocation ?? _mapCenter;
+    final target = _currentUserLocation ?? _bakuYouthHubCenter;
     if (_isMapReady && _mapController != null) {
       await _mapController!.animateCamera(
         CameraUpdate.newLatLngZoom(target, 14.5),
@@ -1402,7 +1414,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         });
                         _mapController = controller;
                         _clearMapDebugMessage();
-                        if (_pendingCameraFitToMarkers ||
+                        if (_pendingLocationCameraMove &&
+                            _currentUserLocation != null) {
+                          _pendingLocationCameraMove = false;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && _currentUserLocation != null) {
+                              _moveTo(_currentUserLocation!, 14.5);
+                            }
+                          });
+                        } else if (_pendingCameraFitToMarkers ||
                             _filteredJobs.isNotEmpty) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) {
