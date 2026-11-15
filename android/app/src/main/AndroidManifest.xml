@@ -54,7 +54,7 @@
         </activity>
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyAa8tlpQVjOFshZx_QZqyYPgBXMc_vLnEY"/>
+            android:value="${MAPS_API_KEY}"/>
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-7785740776753328~8076839059"/>        <!-- Don't delete the meta-data below.

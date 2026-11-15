@@ -6,6 +6,7 @@ workflows:
     environment:
       android_signing:
         - workspot_upload
+      # Define MAPS_API_KEY in this group; Gradle injects it into the Android manifest.
       groups:
         - workspot_admin
       flutter: stable
