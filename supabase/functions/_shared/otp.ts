@@ -11,6 +11,14 @@ export const jsonResponse = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
+export function unsupportedOtpVersionResponse(version: unknown): Response | null {
+  if (version === 2) return null;
+  return jsonResponse(
+    { error: 'Please update the WorkSpot app to send an OTP.' },
+    426,
+  );
+}
+
 export const PHONE_PATTERN = /^994(?:10|50|51|55|60|70|77|99)\d{7}$/;
 
 const toHex = (buffer: ArrayBuffer) =>
