@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/feature_flags.dart';
 import '../services/app_language.dart';
 import '../services/payment_service.dart';
 
@@ -149,7 +150,7 @@ class _JobPaymentScreenState extends State<JobPaymentScreen>
   }
 
   Future<void> _pay() async {
-    if (_isProcessing || _hasFinished) return;
+    if (!paidListingsEnabled || _isProcessing || _hasFinished) return;
 
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null || !PaymentService.isValidUuid(userId)) {
@@ -260,6 +261,22 @@ class _JobPaymentScreenState extends State<JobPaymentScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!paidListingsEnabled) {
+      return Scaffold(
+        backgroundColor: _background,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              appLang.translate('paid_listings_unavailable'),
+              style: const TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _background,
       appBar: AppBar(

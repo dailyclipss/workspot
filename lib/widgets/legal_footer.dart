@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/feature_flags.dart';
 import '../services/app_language.dart';
 
 class LegalInfo {
@@ -237,8 +238,10 @@ class LegalPage extends StatelessWidget {
                     Icons.location_on_rounded, t.addressLabel, t.address),
               ],
             ),
-          LegalPageType.privacy => _sections(t.privacySections),
-          LegalPageType.terms => _sections(t.termsSections),
+          LegalPageType.privacy =>
+            _sections(_visibleLegalSections(type, t.privacySections)),
+          LegalPageType.terms =>
+            _sections(_visibleLegalSections(type, t.termsSections)),
         };
 
         return Scaffold(
@@ -284,6 +287,21 @@ class LegalPage extends StatelessWidget {
       },
     );
   }
+}
+
+List<MapEntry<String, String>> _visibleLegalSections(
+  LegalPageType type,
+  List<MapEntry<String, String>> sections,
+) {
+  if (paidListingsEnabled) return sections;
+  return switch (type) {
+    LegalPageType.privacy => sections.take(1).toList(),
+    LegalPageType.terms => [
+        ...sections.take(2),
+        ...sections.skip(3),
+      ],
+    _ => sections,
+  };
 }
 
 class LegalFooter extends StatelessWidget {

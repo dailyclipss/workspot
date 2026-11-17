@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/feature_flags.dart';
+import '../services/app_language.dart';
 import '../services/payment_service.dart';
 import 'home_map_screen.dart';
 
@@ -30,6 +32,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _handlePaymentSuccess() async {
+    if (!paidListingsEnabled) return;
+
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (!PaymentService.isValidUuid(userId) ||
         !PaymentService.isValidUuid(widget.jobId)) {
@@ -98,6 +102,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!paidListingsEnabled) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              appLang.translate('paid_listings_unavailable'),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _background,
       appBar: AppBar(
