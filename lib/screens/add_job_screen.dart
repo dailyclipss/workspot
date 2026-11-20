@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/category.dart';
 import '../models/district.dart';
+import '../config/feature_flags.dart';
 import '../services/app_language.dart';
 import '../services/geocoding_service.dart';
 import '../services/job_location_resolver.dart';
@@ -352,7 +353,7 @@ class _AddJobScreenState extends State<AddJobScreen> {
       'latitude': resolvedLocation.latitude,
       'longitude': resolvedLocation.longitude,
       'has_vacancy': _hasVacancy,
-      'is_vip': _isVip,
+      'is_vip': paidListingsEnabled && _isVip,
       'user_id': Supabase.instance.client.auth.currentUser?.id,
       'owner_id': Supabase.instance.client.auth.currentUser?.id,
       'created_by': Supabase.instance.client.auth.currentUser?.id,
@@ -441,21 +442,36 @@ class _AddJobScreenState extends State<AddJobScreen> {
 
     try {
       final jobData = _buildJobPayload();
-      final didPublish = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => JobPaymentScreen(
-            jobDraft: jobData,
-            preferPremium: _isVip,
-            publishJob: (payload) async {
-              final inserted = await _insertJobWithFallback(payload);
-              return inserted.isEmpty ? null : inserted.first['id']?.toString();
-            },
+      if (paidListingsEnabled) {
+        final didPublish = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => JobPaymentScreen(
+              jobDraft: jobData,
+              preferPremium: _isVip,
+              publishJob: (payload) async {
+                final inserted = await _insertJobWithFallback(payload);
+                return inserted.isEmpty
+                    ? null
+                    : inserted.first['id']?.toString();
+              },
+            ),
           ),
-        ),
-      );
+        );
 
-      if (!mounted) return;
-      if (didPublish == true) {
+        if (!mounted) return;
+        if (didPublish == true) {
+          Navigator.of(context).pop(true);
+        }
+      } else {
+        final inserted = await _insertJobWithFallback(jobData);
+        if (inserted.isEmpty ||
+            inserted.first['id']?.toString().isNotEmpty != true) {
+          throw StateError(appLang.translate('pj_create_failed'));
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(appLang.translate('aj_submitted_success'))),
+        );
         Navigator.of(context).pop(true);
       }
     } catch (error) {
@@ -689,15 +705,17 @@ class _AddJobScreenState extends State<AddJobScreen> {
                     value: _hasVacancy,
                     onChanged: (value) => setState(() => _hasVacancy = value),
                   ),
-                  const Divider(height: 16),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(appLang.translate('aj_vip'), style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(appLang.translate('aj_vip_sub')),
-                    activeColor: Colors.amber.shade700,
-                    value: _isVip,
-                    onChanged: (value) => setState(() => _isVip = value),
-                  ),
+                  if (paidListingsEnabled)
+                    const Divider(height: 16),
+                  if (paidListingsEnabled)
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(appLang.translate('aj_vip'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(appLang.translate('aj_vip_sub')),
+                      activeColor: Colors.amber.shade700,
+                      value: _isVip,
+                      onChanged: (value) => setState(() => _isVip = value),
+                    ),
                 ],
               ),
               const SizedBox(height: 14),
@@ -816,7 +834,11 @@ class _AddJobScreenState extends State<AddJobScreen> {
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
                         )
                       : Text(
-                          appLang.translate('aj_submit'),
+                          appLang.translate(
+                            paidListingsEnabled
+                                ? 'aj_submit'
+                                : 'aj_submit_free',
+                          ),
                           style: TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w700),
                         ),
                 ),

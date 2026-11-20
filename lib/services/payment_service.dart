@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/feature_flags.dart';
 import 'app_language.dart';
 
 /// Which record in Supabase should be marked VIP after a successful payment.
@@ -93,6 +94,10 @@ class PaymentService {
     String? orderId,
     bool sameTabOnWeb = false,
   }) async {
+    if (!paidListingsEnabled) {
+      return appLang.translate('paid_listings_unavailable');
+    }
+
     try {
       final session = _client.auth.currentSession;
       final userId = _client.auth.currentUser?.id;
